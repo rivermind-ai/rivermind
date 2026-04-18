@@ -51,7 +51,7 @@ def test_valid_fact_observation() -> None:
 def test_event_observation_without_subject_is_valid() -> None:
     obs = Observation(
         id="obs-4",
-        content="onsite at Stripe",
+        content="onsite at Acme",
         kind=Kind.EVENT,
         observed_at=_t(),
     )
@@ -82,11 +82,11 @@ def test_only_facts_can_be_superseded() -> None:
 def test_fact_can_be_superseded() -> None:
     obs = Observation(
         id="obs-7",
-        content="user works at Stripe",
+        content="user works at Acme",
         kind=Kind.FACT,
         subject="user",
         attribute="employer",
-        value="Stripe",
+        value="Acme",
         observed_at=_t(),
         superseded_by="obs-8",
     )
@@ -147,11 +147,11 @@ def test_recorded_at_defaults_to_tz_aware_utc() -> None:
 def test_observation_roundtrip_via_model_dump() -> None:
     obs = Observation(
         id="obs-13",
-        content="user works at Stripe",
+        content="user works at Acme",
         kind=Kind.FACT,
         subject="user",
         attribute="employer",
-        value={"company": "Stripe", "start": 2026},
+        value={"company": "Acme", "start": 2026},
         observed_at=_t(),
         source_model="claude-opus",
         session_id="sess-1",
@@ -164,19 +164,19 @@ def test_state_basic_construction() -> None:
     s = State(
         subject="user",
         attribute="employer",
-        current_value="Stripe",
+        current_value="Acme",
         current_since=_t(),
         source_observation="obs-1",
     )
     assert s.subject == "user"
-    assert s.current_value == "Stripe"
+    assert s.current_value == "Acme"
 
 
 def test_state_is_frozen() -> None:
     s = State(
         subject="user",
         attribute="employer",
-        current_value="Stripe",
+        current_value="Acme",
         current_since=_t(),
         source_observation="obs-1",
     )
@@ -189,7 +189,7 @@ def test_state_source_observation_must_be_prefixed() -> None:
         State(
             subject="user",
             attribute="employer",
-            current_value="Stripe",
+            current_value="Acme",
             current_since=_t(),
             source_observation="123",
         )

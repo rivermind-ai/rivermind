@@ -111,16 +111,16 @@ def test_fts_insert_trigger_indexes_new_row(db: sqlite3.Connection) -> None:
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
             "obs-1",
-            "user works at Stripe",
+            "user works at Acme",
             "fact",
             "user",
             "employer",
-            json.dumps("Stripe"),
+            json.dumps("Acme"),
             "2026-04-01T00:00:00Z",
         ),
     )
     rows = db.execute(
-        "SELECT rowid FROM observations_fts WHERE observations_fts MATCH 'Stripe'"
+        "SELECT rowid FROM observations_fts WHERE observations_fts MATCH 'Acme'"
     ).fetchall()
     assert len(rows) == 1
 
@@ -199,7 +199,7 @@ def test_state_source_observation_fk_enforced(db: sqlite3.Connection) -> None:
             (
                 "user",
                 "employer",
-                json.dumps("Stripe"),
+                json.dumps("Acme"),
                 "2026-04-01T00:00:00Z",
                 "obs-does-not-exist",
             ),
