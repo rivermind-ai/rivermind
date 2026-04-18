@@ -13,8 +13,8 @@ Python 3.11 or 3.12 (nothing older).
 ```bash
 git clone https://github.com/rivermind-ai/rivermind.git
 cd rivermind
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
+make install
+source .venv/bin/activate
 ```
 
 ## Running checks
@@ -22,13 +22,11 @@ pip install -e ".[dev]"
 Run everything CI runs, locally, before pushing:
 
 ```bash
-ruff check .
-ruff format --check .
-mypy src/
-pytest
+make lint   # ruff check + ruff format --check + mypy
+make test   # pytest with coverage
 ```
 
-Autoformat with `ruff format .`. Auto-fix most lint with `ruff check --fix .`.
+Autoformat with `make format`. Run `make` with no arguments to see all available targets.
 
 ## Branching
 
