@@ -1,0 +1,90 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ---------- Testing / coverage ----------
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# ---------- Type checkers / linters ----------
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ---------- SQLite ----------
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# ---------- Env files ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Virtual environments ----------
+.venv/
+venv/
+ENV/
+env/
+
+# ---------- IDE / editor junk ----------
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- Jupyter ----------
+.ipynb_checkpoints/
+
+# ---------- Local notes / scratch ----------
+scratch/
+TODO.local.md
+
+# ---------- Claude Code ----------
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+
+# ---------- Other ------------
+architecture.md
