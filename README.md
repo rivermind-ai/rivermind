@@ -1,5 +1,7 @@
 # rivermind
 
+[![CI](https://github.com/rivermind-ai/rivermind/actions/workflows/ci.yml/badge.svg)](https://github.com/rivermind-ai/rivermind/actions/workflows/ci.yml)
+
 > _Problem statement goes here — one or two sentences on what rivermind does and who it's for._
 
 > ⚠️ **Under active development.** APIs, schemas, and on-disk formats are unstable and may change without notice. Pin to a commit if you depend on it.
