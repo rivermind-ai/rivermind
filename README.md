@@ -22,6 +22,10 @@
 # TODO: clone, venv, install, run tests
 ```
 
+## Documentation
+
+- [Architecture](./docs/ARCHITECTURE.md) — system structure, updated as the code is written.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
