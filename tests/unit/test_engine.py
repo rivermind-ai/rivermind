@@ -59,6 +59,9 @@ class _RecordingStore:
     def upsert_state(self, state: State) -> None:
         self.calls.append(("upsert_state", (state,)))
         key = (state.subject, state.attribute)
+        existing = next((s for s in self._states if (s.subject, s.attribute) == key), None)
+        if existing is not None and state.current_since <= existing.current_since:
+            return
         self._states = [s for s in self._states if (s.subject, s.attribute) != key]
         self._states.append(state)
 
@@ -123,7 +126,7 @@ def test_record_observation_persists_and_returns_id() -> None:
     assert store.calls[0] == ("save_observation", (obs,))
 
 
-def test_record_observation_does_not_project_state() -> None:
+def test_record_observation_projects_state_for_fact() -> None:
     store = _RecordingStore()
     engine = Engine(store)
     fact = Observation(
@@ -136,9 +139,27 @@ def test_record_observation_does_not_project_state() -> None:
         observed_at=_t(),
     )
     engine.record_observation(fact)
-    call_names = [name for name, _ in store.calls]
-    assert call_names == ["save_observation"]
-    assert engine.get_current_state(subject="user", attribute="role") == []
+    rows = engine.get_current_state(subject="user", attribute="role")
+    assert len(rows) == 1
+    assert rows[0].current_value == "admin"
+    assert rows[0].source_observation == "obs-fact"
+    assert rows[0].current_since == _t()
+
+
+def test_record_observation_does_not_project_state_for_event() -> None:
+    store = _RecordingStore()
+    engine = Engine(store)
+    engine.record_observation(
+        Observation(
+            id="obs-event",
+            content="visited HQ",
+            kind=Kind.EVENT,
+            observed_at=_t(),
+        )
+    )
+    call_names = {name for name, _ in store.calls}
+    assert "upsert_state" not in call_names
+    assert engine.get_current_state() == []
 
 
 def test_get_timeline_passes_through_to_store() -> None:
