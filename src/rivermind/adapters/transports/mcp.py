@@ -7,6 +7,7 @@ FastAPI app. The app mounts the MCP streamable HTTP transport under
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import time
 import uuid
@@ -21,11 +22,14 @@ from pydantic import Field, JsonValue, ValidationError
 
 from rivermind.core.ids import new_observation_id
 from rivermind.core.models import Kind, Observation
+from rivermind.core.reeval import run_reeval
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Awaitable, Callable
+    from contextlib import AbstractAsyncContextManager
 
     from rivermind.core.engine import Engine
+    from rivermind.core.interfaces import NarrativeSynthesizer
 
 _logger = structlog.get_logger()
 
@@ -90,6 +94,58 @@ def _parse_period(value: str) -> tuple[datetime, datetime]:
     raise ValueError(f"get_narrative validation failed: {error}")
 
 
+def _make_lifespan(
+    mcp: FastMCP,
+    engine: Engine,
+    synthesizer: NarrativeSynthesizer | None,
+    *,
+    run_reeval_on_startup: bool,
+) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
+    """Build the FastAPI lifespan handler.
+
+    Enters the FastMCP session manager (so the streamable HTTP transport
+    works when mounted under FastAPI), and optionally kicks off the
+    startup re-eval pass as a background task that doesn't block the
+    server from accepting connections.
+    """
+
+    @contextlib.asynccontextmanager
+    async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        async with mcp.session_manager.run():
+            reeval_task: asyncio.Task[Any] | None = None
+            if run_reeval_on_startup:
+                reeval_task = asyncio.create_task(
+                    asyncio.to_thread(
+                        run_reeval,
+                        engine._store,
+                        synthesizer=synthesizer,
+                    )
+                )
+                reeval_task.add_done_callback(_log_reeval_task_result)
+            try:
+                yield
+            finally:
+                if reeval_task is not None and not reeval_task.done():
+                    reeval_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await reeval_task
+
+    return _lifespan
+
+
+def _log_reeval_task_result(task: asyncio.Task[Any]) -> None:
+    """done-callback for the startup re-eval background task.
+
+    Swallows exceptions so a failed re-eval never crashes the server.
+    Cancellation (e.g. on shutdown) is not logged as an error.
+    """
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        _logger.exception("reeval_task_failed", error=str(exc), exc_info=exc)
+
+
 def _log_tool_call(
     tool_name: str,
 ) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
@@ -125,12 +181,22 @@ def _log_tool_call(
     return decorate
 
 
-def create_app(engine: Engine) -> FastAPI:
+def create_app(
+    engine: Engine,
+    *,
+    synthesizer: NarrativeSynthesizer | None = None,
+    run_reeval_on_startup: bool = True,
+) -> FastAPI:
     """Build a FastAPI app that hosts the MCP server and a health endpoint.
 
     The ``engine`` is captured in the closure of tool handlers; there is
     no module-level state and no singleton. Tests instantiate this factory
     with a fake engine to exercise the transport in isolation.
+
+    When ``run_reeval_on_startup`` is true (the default), the lifespan
+    kicks off a background re-eval pass after the server has started
+    accepting connections. Pass False in tests that don't want the
+    background task touching shared state.
     """
     # Collapse the default FastMCP path so mounting at "/mcp" exposes the
     # handler at "/mcp" rather than "/mcp/mcp".
@@ -275,17 +341,8 @@ def create_app(engine: Engine) -> FastAPI:
         return {"narrative": result.model_dump(mode="json")}
 
     mcp_asgi = mcp.streamable_http_app()
-
-    @contextlib.asynccontextmanager
-    async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-        # FastMCP's streamable HTTP transport relies on a session manager
-        # running inside a task group. Mounting a Starlette app on FastAPI
-        # does not run its lifespan automatically, so we explicitly enter
-        # the FastMCP lifespan context here.
-        async with mcp.session_manager.run():
-            yield
-
-    app = FastAPI(title="rivermind", version="0.0.1", lifespan=_lifespan)
+    lifespan = _make_lifespan(mcp, engine, synthesizer, run_reeval_on_startup=run_reeval_on_startup)
+    app = FastAPI(title="rivermind", version="0.0.1", lifespan=lifespan)
 
     @app.get("/health")
     async def health() -> dict[str, Any]:

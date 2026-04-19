@@ -118,6 +118,13 @@ class _RecordingStore:
             hits = [n for n in hits if n.superseded_by is None]
         return sorted(hits, key=lambda n: n.generated_at, reverse=True)
 
+    def record_reeval(self, period_start: datetime, period_end: datetime) -> None:
+        self.calls.append(("record_reeval", (period_start, period_end)))
+
+    def reeval_exists(self, period_start: datetime, period_end: datetime) -> bool:
+        self.calls.append(("reeval_exists", (period_start, period_end)))
+        return False
+
     def schema_version(self) -> int:
         self.calls.append(("schema_version", ()))
         return 1

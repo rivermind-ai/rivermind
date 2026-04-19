@@ -136,6 +136,19 @@ class MemoryStore(Protocol):
         """
         ...
 
+    def record_reeval(self, period_start: datetime, period_end: datetime) -> None:
+        """Record that a re-eval pass covered ``[period_start, period_end]``.
+
+        Idempotent: re-recording the same period is a no-op. The row is an
+        audit marker used at startup to skip periods that have already been
+        processed; it carries no per-phase status beyond existence.
+        """
+        ...
+
+    def reeval_exists(self, period_start: datetime, period_end: datetime) -> bool:
+        """Return True iff a re-eval row exists for the exact period bounds."""
+        ...
+
     def schema_version(self) -> int:
         """Return the currently-applied schema version (0 if no schema yet).
 

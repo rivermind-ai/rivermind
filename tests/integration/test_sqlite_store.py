@@ -37,7 +37,7 @@ class TestSQLiteContractCompliance(MemoryStoreContractTests):
 def test_construction_applies_migrations(tmp_db_path: Path) -> None:
     with SQLiteMemoryStore(tmp_db_path) as s:
         row = s._conn.execute("SELECT version FROM schema_version").fetchone()
-        assert row["version"] == 1
+        assert row["version"] == 2
 
 
 def test_pragmas_are_set(tmp_db_path: Path) -> None:

@@ -66,6 +66,12 @@ class _StubMemoryStore:
     ) -> list[Narrative]:
         return []
 
+    def record_reeval(self, period_start: datetime, period_end: datetime) -> None:
+        pass
+
+    def reeval_exists(self, period_start: datetime, period_end: datetime) -> bool:
+        return False
+
     def schema_version(self) -> int:
         return 1
 
@@ -116,6 +122,8 @@ def test_memory_store_method_names() -> None:
         "save_narrative",
         "mark_narrative_superseded",
         "get_narratives",
+        "record_reeval",
+        "reeval_exists",
         "schema_version",
     }
     actual = {
