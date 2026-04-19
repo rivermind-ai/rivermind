@@ -49,12 +49,19 @@ class MemoryStore(Protocol):
         start: datetime,
         end: datetime,
         topic: str | None = None,
+        *,
+        limit: int | None = None,
+        include_superseded: bool = False,
     ) -> list[Observation]:
         """Return observations with ``observed_at`` in ``[start, end]``.
 
         If ``topic`` is given, it is interpreted as an FTS5 MATCH query
         against the observation content. Results are ordered by
         ``observed_at`` ascending.
+
+        By default, observations whose ``superseded_by`` is non-null are
+        filtered out; pass ``include_superseded=True`` to include them.
+        Pass a positive ``limit`` to cap the number of rows returned.
         """
         ...
 

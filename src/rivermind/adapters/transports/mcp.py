@@ -34,6 +34,14 @@ _NOT_IMPLEMENTED_PAYLOAD: dict[str, Any] = {
 }
 
 
+def _parse_iso8601(value: str, *, field: str, tool: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError as exc:
+        error = [{"field": field, "msg": f"not a valid ISO-8601 datetime: {exc}"}]
+        raise ValueError(f"{tool} validation failed: {error}") from exc
+
+
 def _log_tool_call(
     tool_name: str,
 ) -> Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]:
@@ -99,23 +107,15 @@ def create_app(engine: Engine) -> FastAPI:
         value: JsonValue | None = None,
         session_id: str | None = None,
     ) -> dict[str, str]:
-        errors: list[dict[str, str]] = []
-
-        try:
-            parsed_observed_at = datetime.fromisoformat(observed_at)
-        except ValueError as exc:
-            errors.append({"field": "observed_at", "msg": f"not a valid ISO-8601 datetime: {exc}"})
-            parsed_observed_at = None
-
+        parsed_observed_at = _parse_iso8601(
+            observed_at, field="observed_at", tool="record_observation"
+        )
         if session_id is not None:
             try:
                 uuid.UUID(session_id)
-            except ValueError:
-                errors.append({"field": "session_id", "msg": "must be a UUID string"})
-
-        if errors:
-            raise ValueError(f"record_observation validation failed: {errors}")
-
+            except ValueError as exc:
+                errors = [{"field": "session_id", "msg": "must be a UUID string"}]
+                raise ValueError(f"record_observation validation failed: {errors}") from exc
         try:
             observation = Observation(
                 id=new_observation_id(),
@@ -124,7 +124,7 @@ def create_app(engine: Engine) -> FastAPI:
                 subject=subject,
                 attribute=attribute,
                 value=value,
-                observed_at=parsed_observed_at,  # type: ignore[arg-type]
+                observed_at=parsed_observed_at,
                 session_id=session_id,
             )
         except ValidationError as exc:
@@ -141,11 +141,36 @@ def create_app(engine: Engine) -> FastAPI:
 
     @mcp.tool(
         name="get_timeline",
-        description="Return observations in a time range, chronologically.",
+        description=(
+            "Return observations whose observed_at falls in [start, end], ordered "
+            "chronologically (oldest first). Start and end are ISO-8601 datetimes "
+            "with timezone. Optional topic filters via full-text match against content. "
+            "Superseded observations are excluded by default; set include_superseded=true "
+            "to see them. limit caps rows returned (default 100, max 500). When the page is "
+            "full, next_cursor is the last returned observed_at and can be passed as start "
+            "to continue; otherwise next_cursor is null."
+        ),
     )
     @_log_tool_call("get_timeline")
-    async def get_timeline() -> dict[str, Any]:
-        return _NOT_IMPLEMENTED_PAYLOAD
+    async def get_timeline(
+        start: str,
+        end: str,
+        topic: str | None = None,
+        limit: Annotated[int, Field(ge=1, le=500)] = 100,
+        include_superseded: bool = False,
+    ) -> dict[str, Any]:
+        parsed_start = _parse_iso8601(start, field="start", tool="get_timeline")
+        parsed_end = _parse_iso8601(end, field="end", tool="get_timeline")
+        observations = engine.get_timeline(
+            parsed_start,
+            parsed_end,
+            topic,
+            limit=limit,
+            include_superseded=include_superseded,
+        )
+        serialized = [o.model_dump(mode="json") for o in observations]
+        next_cursor = serialized[-1]["observed_at"] if len(serialized) == limit else None
+        return {"observations": serialized, "next_cursor": next_cursor}
 
     @mcp.tool(
         name="get_current_state",
