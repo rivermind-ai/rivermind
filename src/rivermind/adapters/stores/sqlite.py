@@ -131,15 +131,32 @@ class SQLiteMemoryStore(MemoryStore):
         ).fetchone()
         if row is None:
             return None
-        return State.model_validate(
-            {
-                "subject": row["subject"],
-                "attribute": row["attribute"],
-                "current_value": _load_json(row["current_value"]),
-                "current_since": row["current_since"],
-                "source_observation": row["source_observation"],
-            }
-        )
+        return self._row_to_state(row)
+
+    def list_states(
+        self,
+        subject: str | None = None,
+        attribute: str | None = None,
+    ) -> list[State]:
+        if subject is not None and attribute is not None:
+            cur = self._conn.execute(
+                "SELECT * FROM state WHERE subject = ? AND attribute = ? "
+                "ORDER BY subject ASC, attribute ASC",
+                (subject, attribute),
+            )
+        elif subject is not None:
+            cur = self._conn.execute(
+                "SELECT * FROM state WHERE subject = ? ORDER BY subject ASC, attribute ASC",
+                (subject,),
+            )
+        elif attribute is not None:
+            cur = self._conn.execute(
+                "SELECT * FROM state WHERE attribute = ? ORDER BY subject ASC, attribute ASC",
+                (attribute,),
+            )
+        else:
+            cur = self._conn.execute("SELECT * FROM state ORDER BY subject ASC, attribute ASC")
+        return [self._row_to_state(row) for row in cur.fetchall()]
 
     def save_narrative(self, narrative: Narrative) -> None:
         with self._conn:
@@ -182,6 +199,18 @@ class SQLiteMemoryStore(MemoryStore):
                 (period_end.isoformat(), period_start.isoformat(), topic),
             )
         return [self._row_to_narrative(row) for row in cur.fetchall()]
+
+    @staticmethod
+    def _row_to_state(row: sqlite3.Row) -> State:
+        return State.model_validate(
+            {
+                "subject": row["subject"],
+                "attribute": row["attribute"],
+                "current_value": _load_json(row["current_value"]),
+                "current_since": row["current_since"],
+                "source_observation": row["source_observation"],
+            }
+        )
 
     @staticmethod
     def _row_to_observation(row: sqlite3.Row) -> Observation:

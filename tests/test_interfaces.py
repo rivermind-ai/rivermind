@@ -37,6 +37,13 @@ class _StubMemoryStore:
     def get_state(self, subject: str, attribute: str) -> State | None:
         return None
 
+    def list_states(
+        self,
+        subject: str | None = None,
+        attribute: str | None = None,
+    ) -> list[State]:
+        return []
+
     def save_narrative(self, narrative: Narrative) -> None:
         pass
 
@@ -90,6 +97,7 @@ def test_memory_store_method_names() -> None:
         "get_observations",
         "upsert_state",
         "get_state",
+        "list_states",
         "save_narrative",
         "get_narratives",
     }

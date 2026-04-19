@@ -1,7 +1,7 @@
 """Adapter-specific tests for SQLiteMemoryStore.
 
 Generic MemoryStore contract tests (that any implementation must pass)
-are RIV-17's scope.
+land later, separately from this file.
 """
 
 from __future__ import annotations
@@ -222,6 +222,75 @@ def test_upsert_state_drops_stale_write(store: SQLiteMemoryStore) -> None:
 
 def test_get_state_returns_none_on_miss(store: SQLiteMemoryStore) -> None:
     assert store.get_state("nobody", "nothing") is None
+
+
+def _seed_states(store: SQLiteMemoryStore) -> None:
+    for i, (subject, attribute, value) in enumerate(
+        [
+            ("user", "employer", "Acme"),
+            ("user", "role", "staff engineer"),
+            ("team", "employer", "Globex"),
+        ]
+    ):
+        store.save_observation(
+            Observation(
+                id=f"obs-seed-{i}",
+                content=f"{subject} {attribute} {value}",
+                kind=Kind.FACT,
+                subject=subject,
+                attribute=attribute,
+                value=value,
+                observed_at=_t(i),
+            )
+        )
+        store.upsert_state(
+            State(
+                subject=subject,
+                attribute=attribute,
+                current_value=value,
+                current_since=_t(i),
+                source_observation=f"obs-seed-{i}",
+            )
+        )
+
+
+def test_list_states_no_filter_returns_all(store: SQLiteMemoryStore) -> None:
+    _seed_states(store)
+    rows = store.list_states()
+    assert {(s.subject, s.attribute) for s in rows} == {
+        ("user", "employer"),
+        ("user", "role"),
+        ("team", "employer"),
+    }
+
+
+def test_list_states_filter_by_subject(store: SQLiteMemoryStore) -> None:
+    _seed_states(store)
+    rows = store.list_states(subject="user")
+    assert {s.attribute for s in rows} == {"employer", "role"}
+
+
+def test_list_states_filter_by_attribute(store: SQLiteMemoryStore) -> None:
+    _seed_states(store)
+    rows = store.list_states(attribute="employer")
+    assert {s.subject for s in rows} == {"user", "team"}
+
+
+def test_list_states_filter_by_both(store: SQLiteMemoryStore) -> None:
+    _seed_states(store)
+    rows = store.list_states(subject="user", attribute="employer")
+    assert len(rows) == 1
+    assert rows[0].current_value == "Acme"
+
+
+def test_list_states_ordered_by_subject_then_attribute(store: SQLiteMemoryStore) -> None:
+    _seed_states(store)
+    rows = store.list_states()
+    assert [(s.subject, s.attribute) for s in rows] == [
+        ("team", "employer"),
+        ("user", "employer"),
+        ("user", "role"),
+    ]
 
 
 def test_save_narrative_roundtrips_source_observations_list(store: SQLiteMemoryStore) -> None:
