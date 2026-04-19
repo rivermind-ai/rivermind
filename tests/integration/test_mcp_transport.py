@@ -40,14 +40,14 @@ def engine(tmp_db_path: Path) -> Generator[Engine, None, None]:
 
 @pytest.fixture
 def client(engine: Engine) -> TestClient:
-    return TestClient(create_app(engine))
+    return TestClient(create_app(engine, run_reeval_on_startup=False))
 
 
 def test_health_endpoint_returns_schema_version(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
     body = response.json()
-    assert body == {"status": "ok", "schema_version": 1}
+    assert body == {"status": "ok", "schema_version": 2}
 
 
 def test_health_endpoint_reports_error_when_store_unreachable() -> None:
@@ -57,7 +57,7 @@ def test_health_endpoint_reports_error_when_store_unreachable() -> None:
 
     # The factory types Engine but only uses schema_version at /health;
     # duck-typing a broken stand-in is sufficient for the failure path.
-    app = create_app(_BrokenEngine())  # type: ignore[arg-type]
+    app = create_app(_BrokenEngine(), run_reeval_on_startup=False)  # type: ignore[arg-type]
     client = TestClient(app)
     body = client.get("/health").json()
     assert body["status"] == "error"
@@ -66,7 +66,7 @@ def test_health_endpoint_reports_error_when_store_unreachable() -> None:
 
 @pytest.mark.asyncio
 async def test_four_tool_stubs_are_registered(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     mcp = app.state.mcp
     tools = await mcp.list_tools()
     names = {t.name for t in tools}
@@ -83,7 +83,7 @@ async def test_tool_call_emits_structured_log(engine: Engine) -> None:
     cap = structlog.testing.LogCapture()
     structlog.configure(processors=[cap])
     try:
-        app = create_app(engine)
+        app = create_app(engine, run_reeval_on_startup=False)
         mcp = app.state.mcp
         await mcp.call_tool("get_current_state", {})
     finally:
@@ -99,7 +99,7 @@ async def test_tool_call_emits_structured_log(engine: Engine) -> None:
 
 
 def test_mcp_endpoint_is_mounted(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     mounts = [r for r in app.routes if isinstance(r, Mount) and r.path == "/mcp"]
     assert len(mounts) == 1
 
@@ -116,7 +116,7 @@ def test_app_has_no_module_level_state() -> None:
 
 @pytest.mark.asyncio
 async def test_record_observation_fact_persists_and_returns_id(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool(
             "record_observation",
@@ -145,7 +145,7 @@ async def test_record_observation_fact_persists_and_returns_id(engine: Engine) -
 
 @pytest.mark.asyncio
 async def test_record_observation_event_succeeds_without_subject(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool(
             "record_observation",
@@ -161,7 +161,7 @@ async def test_record_observation_event_succeeds_without_subject(engine: Engine)
 
 @pytest.mark.asyncio
 async def test_record_observation_reflection_succeeds(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool(
             "record_observation",
@@ -177,7 +177,7 @@ async def test_record_observation_reflection_succeeds(engine: Engine) -> None:
 
 @pytest.mark.asyncio
 async def test_record_observation_accepts_valid_session_id(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool(
             "record_observation",
@@ -201,7 +201,7 @@ async def _expect_validation_error(
     *,
     expected_field: str,
 ) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     with pytest.raises(Exception) as excinfo:
         await app.state.mcp.call_tool("record_observation", args)
     msg = str(excinfo.value)
@@ -243,7 +243,7 @@ async def test_fact_missing_attribute_is_rejected(engine: Engine) -> None:
 
 @pytest.mark.asyncio
 async def test_fact_without_value_is_accepted(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool(
             "record_observation",
@@ -328,7 +328,7 @@ async def test_malformed_observed_at_is_rejected(engine: Engine) -> None:
 
 @pytest.mark.asyncio
 async def test_bad_kind_is_rejected(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     with pytest.raises(Exception) as excinfo:
         await app.state.mcp.call_tool(
             "record_observation",
@@ -373,7 +373,7 @@ async def _record(engine: Engine, app_state: Any, *, offset: int, **extra: Any) 
 
 @pytest.mark.asyncio
 async def test_get_timeline_returns_observations_ascending(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     for offset in [2, 0, 1]:
         await _record(engine, app.state, offset=offset)
 
@@ -390,7 +390,7 @@ async def test_get_timeline_returns_observations_ascending(engine: Engine) -> No
 
 @pytest.mark.asyncio
 async def test_get_timeline_topic_filters_via_fts(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     await _record(engine, app.state, offset=0, content="visited Acme HQ")
     await _record(engine, app.state, offset=1, content="lunch with a friend")
     result = _tool_payload(
@@ -409,7 +409,7 @@ async def test_get_timeline_topic_filters_via_fts(engine: Engine) -> None:
 
 @pytest.mark.asyncio
 async def test_get_timeline_limit_and_cursor(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     for offset in range(5):
         await _record(engine, app.state, offset=offset)
     result = _tool_payload(
@@ -429,7 +429,7 @@ async def test_get_timeline_limit_and_cursor(engine: Engine) -> None:
 
 @pytest.mark.asyncio
 async def test_get_timeline_cursor_null_when_page_not_full(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     await _record(engine, app.state, offset=0)
     result = _tool_payload(
         await app.state.mcp.call_tool(
@@ -449,7 +449,7 @@ async def test_get_timeline_cursor_null_when_page_not_full(engine: Engine) -> No
 async def test_get_timeline_excludes_superseded_by_default(engine: Engine) -> None:
     newer = engine.record_observation(_fact_observation("obs-newer", 60, "Acme"))
     engine.record_observation(_fact_observation("obs-older", 0, "Globex", superseded_by=newer))
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     result = _tool_payload(
         await app.state.mcp.call_tool(
             "get_timeline",
@@ -464,7 +464,7 @@ async def test_get_timeline_excludes_superseded_by_default(engine: Engine) -> No
 async def test_get_timeline_include_superseded_returns_all(engine: Engine) -> None:
     newer = engine.record_observation(_fact_observation("obs-newer", 60, "Acme"))
     engine.record_observation(_fact_observation("obs-older", 0, "Globex", superseded_by=newer))
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     result = _tool_payload(
         await app.state.mcp.call_tool(
             "get_timeline",
@@ -484,7 +484,7 @@ async def test_get_timeline_include_superseded_returns_all(engine: Engine) -> No
 
 @pytest.mark.asyncio
 async def test_get_timeline_bad_start_is_rejected(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     with pytest.raises(Exception) as excinfo:
         await app.state.mcp.call_tool(
             "get_timeline",
@@ -496,7 +496,7 @@ async def test_get_timeline_bad_start_is_rejected(engine: Engine) -> None:
 
 @pytest.mark.asyncio
 async def test_get_timeline_limit_too_large_is_rejected(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     with pytest.raises(Exception) as excinfo:
         await app.state.mcp.call_tool(
             "get_timeline",
@@ -566,7 +566,7 @@ def _seed_state(
 
 @pytest.mark.asyncio
 async def test_get_current_state_empty_returns_empty_list(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(await app.state.mcp.call_tool("get_current_state", {}))
     assert payload == {"states": []}
 
@@ -577,7 +577,7 @@ async def test_get_current_state_no_filter_returns_all(engine: Engine) -> None:
     _seed_state(engine, subject="user", attribute="role", value="staff", offset=1)
     _seed_state(engine, subject="team", attribute="employer", value="Globex", offset=2)
 
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(await app.state.mcp.call_tool("get_current_state", {}))
     pairs = {(s["subject"], s["attribute"]) for s in payload["states"]}
     assert pairs == {
@@ -593,7 +593,7 @@ async def test_get_current_state_filter_by_subject(engine: Engine) -> None:
     _seed_state(engine, subject="user", attribute="role", value="staff", offset=1)
     _seed_state(engine, subject="team", attribute="employer", value="Globex", offset=2)
 
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(await app.state.mcp.call_tool("get_current_state", {"subject": "user"}))
     attrs = {s["attribute"] for s in payload["states"]}
     assert attrs == {"employer", "role"}
@@ -604,7 +604,7 @@ async def test_get_current_state_filter_by_attribute(engine: Engine) -> None:
     _seed_state(engine, subject="user", attribute="employer", value="Acme")
     _seed_state(engine, subject="team", attribute="employer", value="Globex", offset=1)
 
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool("get_current_state", {"attribute": "employer"})
     )
@@ -616,7 +616,7 @@ async def test_get_current_state_filter_by_attribute(engine: Engine) -> None:
 async def test_get_current_state_filter_by_both_hit(engine: Engine) -> None:
     source_id = _seed_state(engine, subject="user", attribute="employer", value="Acme")
 
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool(
             "get_current_state",
@@ -631,7 +631,7 @@ async def test_get_current_state_filter_by_both_hit(engine: Engine) -> None:
 
 @pytest.mark.asyncio
 async def test_get_current_state_filter_by_both_miss_is_not_error(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool(
             "get_current_state",
@@ -646,7 +646,7 @@ async def test_get_current_state_rows_include_source_observation(engine: Engine)
     _seed_state(engine, subject="user", attribute="employer", value="Acme")
     _seed_state(engine, subject="user", attribute="role", value="staff", offset=1)
 
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(await app.state.mcp.call_tool("get_current_state", {}))
     assert all(s["source_observation"].startswith("obs-") for s in payload["states"])
 
@@ -697,7 +697,7 @@ async def test_get_narrative_last_week_hit(engine: Engine, monkeypatch: pytest.M
         topic="career",
         source_observations=["obs-1", "obs-2"],
     )
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(await app.state.mcp.call_tool("get_narrative", {"period": "last_week"}))
     assert payload["narrative"] is not None
     narr = payload["narrative"]
@@ -723,7 +723,7 @@ async def test_get_narrative_last_month_resolves_window(
         period_start=_FIXED_NOW - timedelta(days=60),
         period_end=_FIXED_NOW - timedelta(days=55),
     )
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool("get_narrative", {"period": "last_month"})
     )
@@ -741,7 +741,7 @@ async def test_get_narrative_last_quarter_hit(
         period_start=_FIXED_NOW - timedelta(days=60),
         period_end=_FIXED_NOW - timedelta(days=55),
     )
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool("get_narrative", {"period": "last_quarter"})
     )
@@ -753,7 +753,7 @@ async def test_get_narrative_iso_interval(engine: Engine) -> None:
     period_start = datetime(2026, 3, 1, tzinfo=UTC)
     period_end = datetime(2026, 3, 8, tzinfo=UTC)
     _save_narrative(engine, id_="nar-iso", period_start=period_start, period_end=period_end)
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool(
             "get_narrative",
@@ -768,7 +768,7 @@ async def test_get_narrative_miss_returns_null_not_error(
     engine: Engine, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _freeze_now(monkeypatch)
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(await app.state.mcp.call_tool("get_narrative", {"period": "last_week"}))
     assert payload["narrative"] is None
     assert "no narrative" in payload["message"]
@@ -786,7 +786,7 @@ async def test_get_narrative_topic_exact_match_miss(
         period_start=_FIXED_NOW - timedelta(days=3),
         period_end=_FIXED_NOW - timedelta(days=1),
     )
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(
         await app.state.mcp.call_tool(
             "get_narrative",
@@ -805,7 +805,7 @@ async def test_get_narrative_no_overlap(engine: Engine, monkeypatch: pytest.Monk
         period_start=_FIXED_NOW - timedelta(days=60),
         period_end=_FIXED_NOW - timedelta(days=50),
     )
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(await app.state.mcp.call_tool("get_narrative", {"period": "last_week"}))
     assert payload["narrative"] is None
 
@@ -830,7 +830,7 @@ async def test_get_narrative_excludes_superseded_by_default(
         generated_at=_FIXED_NOW - timedelta(hours=3),
         superseded_by="nar-new",
     )
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(await app.state.mcp.call_tool("get_narrative", {"period": "last_week"}))
     assert payload["narrative"]["id"] == "nar-new"
 
@@ -855,7 +855,7 @@ async def test_get_narrative_include_superseded_can_return_older(
         generated_at=_FIXED_NOW - timedelta(hours=5),
         superseded_by="nar-new",
     )
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     # With include_superseded=True, both are considered; most recent
     # generated_at still wins — nar-new here.
     payload = _tool_payload(
@@ -869,7 +869,7 @@ async def test_get_narrative_include_superseded_can_return_older(
 
 @pytest.mark.asyncio
 async def test_get_narrative_bad_period_is_rejected(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     with pytest.raises(Exception) as excinfo:
         await app.state.mcp.call_tool("get_narrative", {"period": "last_century"})
     msg = str(excinfo.value).lower()
@@ -878,7 +878,7 @@ async def test_get_narrative_bad_period_is_rejected(engine: Engine) -> None:
 
 @pytest.mark.asyncio
 async def test_get_narrative_bad_iso_interval_is_rejected(engine: Engine) -> None:
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     with pytest.raises(Exception) as excinfo:
         await app.state.mcp.call_tool("get_narrative", {"period": "not-a-date/also-not"})
     msg = str(excinfo.value).lower()
@@ -904,6 +904,6 @@ async def test_get_narrative_most_recent_generated_at_wins(
         period_end=_FIXED_NOW - timedelta(days=1),
         generated_at=_FIXED_NOW - timedelta(hours=1),
     )
-    app = create_app(engine)
+    app = create_app(engine, run_reeval_on_startup=False)
     payload = _tool_payload(await app.state.mcp.call_tool("get_narrative", {"period": "last_week"}))
     assert payload["narrative"]["id"] == "nar-newer"

@@ -194,6 +194,20 @@ class SQLiteMemoryStore(MemoryStore):
             if cur.rowcount == 0:
                 raise ValueError(f"narrative {old_id!r} not found")
 
+    def record_reeval(self, period_start: datetime, period_end: datetime) -> None:
+        with self._conn:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO reeval_runs (period_start, period_end) VALUES (?, ?)",
+                (period_start.isoformat(), period_end.isoformat()),
+            )
+
+    def reeval_exists(self, period_start: datetime, period_end: datetime) -> bool:
+        row = self._conn.execute(
+            "SELECT 1 FROM reeval_runs WHERE period_start = ? AND period_end = ?",
+            (period_start.isoformat(), period_end.isoformat()),
+        ).fetchone()
+        return row is not None
+
     def schema_version(self) -> int:
         return current_version(self._conn)
 

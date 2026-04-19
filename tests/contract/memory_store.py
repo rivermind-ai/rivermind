@@ -539,6 +539,41 @@ class MemoryStoreContractTests:
         with pytest.raises(ValueError):
             store.mark_narrative_superseded("nar-does-not-exist", "nar-also-missing")
 
+    # ---- reeval_runs ------------------------------------------------------
+
+    def test_reeval_exists_returns_false_for_missing(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        assert store.reeval_exists(t(0), t(3600)) is False
+
+    def test_record_reeval_then_exists_returns_true(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        store.record_reeval(t(0), t(3600))
+        assert store.reeval_exists(t(0), t(3600)) is True
+
+    def test_record_reeval_is_idempotent(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        store.record_reeval(t(0), t(3600))
+        store.record_reeval(t(0), t(3600))
+        assert store.reeval_exists(t(0), t(3600)) is True
+
+    def test_reeval_exists_discriminates_by_bounds(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        store.record_reeval(t(0), t(3600))
+        assert store.reeval_exists(t(0), t(7200)) is False
+        assert store.reeval_exists(t(60), t(3600)) is False
+
     # ---- schema_version ---------------------------------------------------
 
     def test_schema_version_returns_positive_int(self, store: MemoryStore) -> None:

@@ -30,14 +30,14 @@ def test_current_version_zero_on_empty_db(conn: sqlite3.Connection) -> None:
 
 def test_fresh_db_applies_initial(conn: sqlite3.Connection) -> None:
     applied = apply_migrations(conn)
-    assert applied == [1]
-    assert current_version(conn) == 1
+    assert applied == [1, 2]
+    assert current_version(conn) == 2
 
 
 def test_rerun_is_idempotent(conn: sqlite3.Connection) -> None:
     apply_migrations(conn)
     assert apply_migrations(conn) == []
-    assert current_version(conn) == 1
+    assert current_version(conn) == 2
 
 
 def test_applied_row_has_sentinel_id_and_timestamp(conn: sqlite3.Connection) -> None:
@@ -46,7 +46,7 @@ def test_applied_row_has_sentinel_id_and_timestamp(conn: sqlite3.Connection) -> 
     assert len(rows) == 1
     id_, version, applied_at = rows[0]
     assert id_ == "schema"
-    assert version == 1
+    assert version == 2
     assert isinstance(applied_at, str) and applied_at
 
 
