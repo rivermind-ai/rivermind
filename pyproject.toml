@@ -47,6 +47,9 @@ anthropic = ["anthropic>=0.30"]
 openai = ["openai>=1.0"]
 llm = ["anthropic>=0.30", "openai>=1.0"]
 
+[project.scripts]
+rivermind = "rivermind.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/rivermind-ai/rivermind"
 Repository = "https://github.com/rivermind-ai/rivermind"
