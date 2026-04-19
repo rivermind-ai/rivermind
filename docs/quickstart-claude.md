@@ -113,9 +113,9 @@ Claude will batch-call `record_observation` for each piece. Expand any tool call
 If Claude doesn't have prior memory of you, seed manually with a few lines:
 
 > Record these to rivermind:
-> - I work at Acme Corp as a staff engineer, started March 2026.
-> - I live in Montreal.
-> - I'm evaluating job offers at Globex and Initech this quarter.
+> - I'm currently reading "The Three-Body Problem" by Liu Cixin.
+> - My 2026 reading goal is 24 books.
+> - Science fiction is my favorite genre.
 
 ## 7. The magic moment
 
@@ -129,11 +129,11 @@ Claude should call `get_current_state` and/or `get_timeline` and come back with 
 
 Try a few more to exercise the tools:
 
-> Check rivermind. Where do I work?
+> Check rivermind. What am I reading right now?
 
-> Check rivermind. What's happened in my career over the last month?
+> Check rivermind. What's my reading goal for this year?
 
-> Check rivermind. What's my target job-search compensation?
+> Check rivermind. What have I finished over the last month?
 
 ![New chat recalls via get_timeline](./assets/quickstart-3-recall.png)
 
@@ -145,27 +145,27 @@ Useful one-liners for daily use. All assume the server is running and Claude Des
 
 **Record an ad-hoc fact:**
 
-> Remember: I switched roles at Acme to staff engineer on April 1, 2026. Record to rivermind.
+> Remember: I switched from paperback to Kindle on April 1, 2026. Record to rivermind.
 
 **Record an event:**
 
-> Log an event to rivermind: onsite interview at Globex today, 9am to 5pm.
+> Log an event to rivermind: started reading "Project Hail Mary" today.
 
 **Record a reflection:**
 
-> Add a reflection to rivermind: the Globex onsite went well but the system-design round was weaker than I'd like.
+> Add a reflection to rivermind: "The Three-Body Problem" was excellent, the physics concepts landed in a way I didn't expect.
 
 **Recall current state:**
 
-> Check rivermind. Where do I work and what's my title?
+> Check rivermind. What book am I on and what's my goal for the year?
 
 **Recall history:**
 
-> Check rivermind. Show me my timeline for the last quarter, chronologically.
+> Check rivermind. Show me my reading timeline for the last quarter, chronologically.
 
 **Topic search:**
 
-> Check rivermind. Search the timeline for anything about interviews.
+> Check rivermind. Search the timeline for anything about science fiction.
 
 **Narrative (once the synthesizer runs):**
 
@@ -175,7 +175,7 @@ Useful one-liners for daily use. All assume the server is running and Claude Des
 
 **Correct a mistake:**
 
-> I made an error earlier. My start date at Acme was actually March 15 2026, not March 1. Record the correction to rivermind.
+> I made an error earlier. I actually finished "The Three-Body Problem" on April 20, not April 15. Record the correction to rivermind.
 
 ## Troubleshooting
 
