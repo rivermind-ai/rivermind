@@ -28,6 +28,9 @@ class _StubMemoryStore:
         start: datetime,
         end: datetime,
         topic: str | None = None,
+        *,
+        limit: int | None = None,
+        include_superseded: bool = False,
     ) -> list[Observation]:
         return []
 
@@ -115,8 +118,17 @@ def test_memory_store_method_names() -> None:
 
 def test_get_observations_signature() -> None:
     sig = inspect.signature(MemoryStore.get_observations)
-    assert list(sig.parameters) == ["self", "start", "end", "topic"]
+    assert list(sig.parameters) == [
+        "self",
+        "start",
+        "end",
+        "topic",
+        "limit",
+        "include_superseded",
+    ]
     assert sig.parameters["topic"].default is None
+    assert sig.parameters["limit"].default is None
+    assert sig.parameters["include_superseded"].default is False
 
 
 def test_get_narratives_signature() -> None:

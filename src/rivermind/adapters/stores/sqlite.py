@@ -85,23 +85,27 @@ class SQLiteMemoryStore(MemoryStore):
         start: datetime,
         end: datetime,
         topic: str | None = None,
+        *,
+        limit: int | None = None,
+        include_superseded: bool = False,
     ) -> list[Observation]:
+        superseded_clause = "" if include_superseded else " AND o.superseded_by IS NULL"
+        limit_clause = " LIMIT ?" if limit is not None else ""
+        params: list[object] = []
         if topic is None:
-            cur = self._conn.execute(
-                "SELECT * FROM observations "
-                "WHERE observed_at BETWEEN ? AND ? "
-                "ORDER BY observed_at ASC",
-                (start.isoformat(), end.isoformat()),
-            )
+            base = "SELECT o.* FROM observations AS o WHERE o.observed_at BETWEEN ? AND ?"
+            params.extend([start.isoformat(), end.isoformat()])
         else:
-            cur = self._conn.execute(
+            base = (
                 "SELECT o.* FROM observations AS o "
                 "JOIN observations_fts AS f ON f.rowid = o.rowid "
-                "WHERE observations_fts MATCH ? "
-                "AND o.observed_at BETWEEN ? AND ? "
-                "ORDER BY o.observed_at ASC",
-                (topic, start.isoformat(), end.isoformat()),
+                "WHERE observations_fts MATCH ? AND o.observed_at BETWEEN ? AND ?"
             )
+            params.extend([topic, start.isoformat(), end.isoformat()])
+        sql = base + superseded_clause + " ORDER BY o.observed_at ASC" + limit_clause
+        if limit is not None:
+            params.append(limit)
+        cur = self._conn.execute(sql, params)
         return [self._row_to_observation(row) for row in cur.fetchall()]
 
     def upsert_state(self, state: State) -> None:

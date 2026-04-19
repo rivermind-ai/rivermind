@@ -143,6 +143,85 @@ class MemoryStoreContractTests:
         )
         assert store.get_observations(t(-60), t(60), topic="bicycle") == []
 
+    def test_get_observations_limit_caps_result_count(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        for i in range(5):
+            store.save_observation(
+                Observation(
+                    id=f"obs-{i}",
+                    content=f"event {i}",
+                    kind=Kind.EVENT,
+                    observed_at=t(i),
+                )
+            )
+        got = store.get_observations(t(-60), t(60), limit=3)
+        assert [o.id for o in got] == ["obs-0", "obs-1", "obs-2"]
+
+    def test_get_observations_excludes_superseded_by_default(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        store.save_observation(
+            Observation(
+                id="obs-newer",
+                content="joined Acme",
+                kind=Kind.FACT,
+                subject="user",
+                attribute="employer",
+                value="Acme",
+                observed_at=t(60),
+            )
+        )
+        store.save_observation(
+            Observation(
+                id="obs-older",
+                content="joined Globex",
+                kind=Kind.FACT,
+                subject="user",
+                attribute="employer",
+                value="Globex",
+                observed_at=t(0),
+                superseded_by="obs-newer",
+            )
+        )
+        default = store.get_observations(t(-60), t(120))
+        assert {o.id for o in default} == {"obs-newer"}
+
+    def test_get_observations_include_superseded_returns_all(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        store.save_observation(
+            Observation(
+                id="obs-newer",
+                content="joined Acme",
+                kind=Kind.FACT,
+                subject="user",
+                attribute="employer",
+                value="Acme",
+                observed_at=t(60),
+            )
+        )
+        store.save_observation(
+            Observation(
+                id="obs-older",
+                content="joined Globex",
+                kind=Kind.FACT,
+                subject="user",
+                attribute="employer",
+                value="Globex",
+                observed_at=t(0),
+                superseded_by="obs-newer",
+            )
+        )
+        full = store.get_observations(t(-60), t(120), include_superseded=True)
+        assert {o.id for o in full} == {"obs-older", "obs-newer"}
+
     # ---- upsert_state / get_state -----------------------------------------
 
     def test_upsert_state_inserts_new_row(

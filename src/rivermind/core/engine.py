@@ -55,14 +55,24 @@ class Engine:
         start: datetime,
         end: datetime,
         topic: str | None = None,
+        *,
+        limit: int | None = None,
+        include_superseded: bool = False,
     ) -> list[Observation]:
         """Return observations with ``observed_at`` in ``[start, end]``.
 
         If ``topic`` is given, it is forwarded to the store as an FTS5
         MATCH query against content. Results ordered by ``observed_at``
-        ascending.
+        ascending. ``limit`` caps the number of rows; by default superseded
+        fact observations are filtered out.
         """
-        return self._store.get_observations(start, end, topic)
+        return self._store.get_observations(
+            start,
+            end,
+            topic,
+            limit=limit,
+            include_superseded=include_superseded,
+        )
 
     def get_current_state(
         self,

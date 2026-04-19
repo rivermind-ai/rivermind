@@ -43,12 +43,18 @@ class _RecordingStore:
         start: datetime,
         end: datetime,
         topic: str | None = None,
+        *,
+        limit: int | None = None,
+        include_superseded: bool = False,
     ) -> list[Observation]:
-        self.calls.append(("get_observations", (start, end, topic)))
+        self.calls.append(("get_observations", (start, end, topic, limit, include_superseded)))
         hits = [o for o in self._observations if start <= o.observed_at <= end]
         if topic is not None:
             hits = [o for o in hits if topic.lower() in o.content.lower()]
-        return sorted(hits, key=lambda o: o.observed_at)
+        if not include_superseded:
+            hits = [o for o in hits if o.superseded_by is None]
+        ordered = sorted(hits, key=lambda o: o.observed_at)
+        return ordered[:limit] if limit is not None else ordered
 
     def upsert_state(self, state: State) -> None:
         self.calls.append(("upsert_state", (state,)))
@@ -135,14 +141,14 @@ def test_get_timeline_passes_through_to_store() -> None:
     store = _RecordingStore()
     engine = Engine(store)
     engine.get_timeline(_t(), _t(60))
-    assert store.calls[-1] == ("get_observations", (_t(), _t(60), None))
+    assert store.calls[-1] == ("get_observations", (_t(), _t(60), None, None, False))
 
 
 def test_get_timeline_forwards_topic() -> None:
     store = _RecordingStore()
     engine = Engine(store)
     engine.get_timeline(_t(), _t(60), topic="acme")
-    assert store.calls[-1] == ("get_observations", (_t(), _t(60), "acme"))
+    assert store.calls[-1] == ("get_observations", (_t(), _t(60), "acme", None, False))
 
 
 def test_get_current_state_forwards_filters() -> None:
@@ -219,6 +225,16 @@ def test_get_narrative_forwards_topic() -> None:
     engine = Engine(store)
     engine.get_narrative(_t(), _t(60), topic="career")
     assert store.calls[-1] == ("get_narratives", (_t(), _t(60), "career"))
+
+
+def test_get_timeline_forwards_limit_and_include_superseded() -> None:
+    store = _RecordingStore()
+    engine = Engine(store)
+    engine.get_timeline(_t(), _t(60), limit=50, include_superseded=True)
+    assert store.calls[-1] == (
+        "get_observations",
+        (_t(), _t(60), None, 50, True),
+    )
 
 
 def test_schema_version_delegates_to_store() -> None:

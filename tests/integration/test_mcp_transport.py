@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -14,6 +14,7 @@ from rivermind.adapters.stores.sqlite import SQLiteMemoryStore
 from rivermind.adapters.transports import mcp as mcp_module
 from rivermind.adapters.transports.mcp import create_app
 from rivermind.core.engine import Engine
+from rivermind.core.models import Kind, Observation
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -81,7 +82,7 @@ async def test_four_tool_stubs_are_registered(engine: Engine) -> None:
 async def test_remaining_tool_stubs_return_not_implemented(engine: Engine) -> None:
     app = create_app(engine)
     mcp = app.state.mcp
-    for name in ("get_timeline", "get_current_state", "get_narrative"):
+    for name in ("get_current_state", "get_narrative"):
         payload = _tool_payload(await mcp.call_tool(name, {}))
         assert payload["status"] == "not_implemented"
 
@@ -93,7 +94,7 @@ async def test_tool_call_emits_structured_log(engine: Engine) -> None:
     try:
         app = create_app(engine)
         mcp = app.state.mcp
-        await mcp.call_tool("get_timeline", {})
+        await mcp.call_tool("get_current_state", {})
     finally:
         structlog.reset_defaults()
 
@@ -101,7 +102,7 @@ async def test_tool_call_emits_structured_log(engine: Engine) -> None:
     assert "tool_call_start" in events
     assert "tool_call_end" in events
     ends = [e for e in cap.entries if e["event"] == "tool_call_end"]
-    assert ends[-1]["tool"] == "get_timeline"
+    assert ends[-1]["tool"] == "get_current_state"
     assert "duration_ms" in ends[-1]
     assert "request_id" in ends[-1]
 
@@ -350,4 +351,178 @@ async def test_bad_session_id_is_rejected(engine: Engine) -> None:
             "session_id": "not-a-uuid",
         },
         expected_field="session_id",
+    )
+
+
+# ---- get_timeline tool: happy path ----------------------------------------
+
+
+async def _record(engine: Engine, app_state: Any, *, offset: int, **extra: Any) -> str:
+    anchor = datetime(2026, 4, 18, 12, 0, 0, tzinfo=UTC) + timedelta(seconds=offset)
+    args = {
+        "kind": "event",
+        "content": f"event at offset {offset}",
+        "observed_at": anchor.isoformat(),
+        **extra,
+    }
+    payload = _tool_payload(await app_state.mcp.call_tool("record_observation", args))
+    return payload["id"]
+
+
+@pytest.mark.asyncio
+async def test_get_timeline_returns_observations_ascending(engine: Engine) -> None:
+    app = create_app(engine)
+    for offset in [2, 0, 1]:
+        await _record(engine, app.state, offset=offset)
+
+    result = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_timeline",
+            {"start": "2026-04-18T11:00:00+00:00", "end": "2026-04-18T13:00:00+00:00"},
+        )
+    )
+    observed_ats = [o["observed_at"] for o in result["observations"]]
+    assert observed_ats == sorted(observed_ats)
+    assert result["next_cursor"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_timeline_topic_filters_via_fts(engine: Engine) -> None:
+    app = create_app(engine)
+    await _record(engine, app.state, offset=0, content="visited Acme HQ")
+    await _record(engine, app.state, offset=1, content="lunch with a friend")
+    result = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_timeline",
+            {
+                "start": "2026-04-18T11:00:00+00:00",
+                "end": "2026-04-18T13:00:00+00:00",
+                "topic": "Acme",
+            },
+        )
+    )
+    assert len(result["observations"]) == 1
+    assert "Acme" in result["observations"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_get_timeline_limit_and_cursor(engine: Engine) -> None:
+    app = create_app(engine)
+    for offset in range(5):
+        await _record(engine, app.state, offset=offset)
+    result = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_timeline",
+            {
+                "start": "2026-04-18T11:00:00+00:00",
+                "end": "2026-04-18T13:00:00+00:00",
+                "limit": 3,
+            },
+        )
+    )
+    assert len(result["observations"]) == 3
+    # Full page → cursor is the last returned observed_at
+    assert result["next_cursor"] == result["observations"][-1]["observed_at"]
+
+
+@pytest.mark.asyncio
+async def test_get_timeline_cursor_null_when_page_not_full(engine: Engine) -> None:
+    app = create_app(engine)
+    await _record(engine, app.state, offset=0)
+    result = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_timeline",
+            {
+                "start": "2026-04-18T11:00:00+00:00",
+                "end": "2026-04-18T13:00:00+00:00",
+                "limit": 10,
+            },
+        )
+    )
+    assert len(result["observations"]) == 1
+    assert result["next_cursor"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_timeline_excludes_superseded_by_default(engine: Engine) -> None:
+    newer = engine.record_observation(_fact_observation("obs-newer", 60, "Acme"))
+    engine.record_observation(_fact_observation("obs-older", 0, "Globex", superseded_by=newer))
+    app = create_app(engine)
+    result = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_timeline",
+            {"start": "2026-04-18T11:00:00+00:00", "end": "2026-04-18T13:00:00+00:00"},
+        )
+    )
+    ids = {o["id"] for o in result["observations"]}
+    assert ids == {"obs-newer"}
+
+
+@pytest.mark.asyncio
+async def test_get_timeline_include_superseded_returns_all(engine: Engine) -> None:
+    newer = engine.record_observation(_fact_observation("obs-newer", 60, "Acme"))
+    engine.record_observation(_fact_observation("obs-older", 0, "Globex", superseded_by=newer))
+    app = create_app(engine)
+    result = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_timeline",
+            {
+                "start": "2026-04-18T11:00:00+00:00",
+                "end": "2026-04-18T13:00:00+00:00",
+                "include_superseded": True,
+            },
+        )
+    )
+    ids = {o["id"] for o in result["observations"]}
+    assert ids == {"obs-newer", "obs-older"}
+
+
+# ---- get_timeline tool: sad path ------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_timeline_bad_start_is_rejected(engine: Engine) -> None:
+    app = create_app(engine)
+    with pytest.raises(Exception) as excinfo:
+        await app.state.mcp.call_tool(
+            "get_timeline",
+            {"start": "not-a-date", "end": "2026-04-18T13:00:00+00:00"},
+        )
+    msg = str(excinfo.value)
+    assert "validation" in msg.lower() and "start" in msg
+
+
+@pytest.mark.asyncio
+async def test_get_timeline_limit_too_large_is_rejected(engine: Engine) -> None:
+    app = create_app(engine)
+    with pytest.raises(Exception) as excinfo:
+        await app.state.mcp.call_tool(
+            "get_timeline",
+            {
+                "start": "2026-04-18T11:00:00+00:00",
+                "end": "2026-04-18T13:00:00+00:00",
+                "limit": 501,
+            },
+        )
+    msg = str(excinfo.value).lower()
+    assert "validation" in msg and "limit" in msg
+
+
+def _fact_observation(
+    id_: str,
+    offset: int,
+    value: str,
+    *,
+    superseded_by: str | None = None,
+) -> Observation:
+    anchor = datetime(2026, 4, 18, 12, 0, 0, tzinfo=UTC) + timedelta(seconds=offset)
+    return Observation(
+        id=id_,
+        content=f"fact at offset {offset} valued {value}",
+        kind=Kind.FACT,
+        subject="user",
+        attribute="employer",
+        value=value,
+        observed_at=anchor,
+        superseded_by=superseded_by,
     )
