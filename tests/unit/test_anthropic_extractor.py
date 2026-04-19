@@ -23,8 +23,8 @@ def _mock_response(text: str) -> MagicMock:
 
 
 def test_requires_key_when_env_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("RIVERMIND_KEY", raising=False)
-    with pytest.raises(ValueError, match="RIVERMIND_KEY"):
+    monkeypatch.delenv("RIVERMIND_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="RIVERMIND_API_KEY"):
         AnthropicSynthesizer()
 
 
@@ -36,7 +36,7 @@ def test_accepts_explicit_api_key() -> None:
 
 
 def test_falls_back_to_env_var(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("RIVERMIND_KEY", "sk-from-env")
+    monkeypatch.setenv("RIVERMIND_API_KEY", "sk-from-env")
     with patch("anthropic.Anthropic") as client_cls:
         AnthropicSynthesizer()
     client_cls.assert_called_once_with(api_key="sk-from-env")

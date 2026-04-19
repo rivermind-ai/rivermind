@@ -108,7 +108,7 @@ def _seed_observation(
 def test_synthesize_skipped_when_env_unset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.delenv("RIVERMIND_KEY", raising=False)
+    monkeypatch.delenv("RIVERMIND_API_KEY", raising=False)
     store = _FakeStore()
     _seed_observation(store, id_="obs-1", content="something")
     result = synthesize_narrative(
@@ -125,7 +125,7 @@ def test_synthesize_skipped_when_env_unset(
 def test_synthesize_skipped_when_no_synthesizer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("RIVERMIND_KEY", "test-key")
+    monkeypatch.setenv("RIVERMIND_API_KEY", "test-key")
     store = _FakeStore()
     _seed_observation(store, id_="obs-1", content="something")
     result = synthesize_narrative(_t(-60), _t(60), None, store, None)  # type: ignore[arg-type]
@@ -136,7 +136,7 @@ def test_synthesize_skipped_when_no_synthesizer(
 def test_synthesize_skipped_when_no_observations_in_period(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("RIVERMIND_KEY", "test-key")
+    monkeypatch.setenv("RIVERMIND_API_KEY", "test-key")
     store = _FakeStore()
     result = synthesize_narrative(
         _t(-60),
@@ -152,7 +152,7 @@ def test_synthesize_skipped_when_no_observations_in_period(
 def test_synthesize_persists_narrative_and_source_observations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("RIVERMIND_KEY", "test-key")
+    monkeypatch.setenv("RIVERMIND_API_KEY", "test-key")
     store = _FakeStore()
     _seed_observation(store, id_="obs-1", content="first", observed_at=_t(0))
     _seed_observation(store, id_="obs-2", content="second", observed_at=_t(60))
@@ -180,7 +180,7 @@ def test_synthesize_persists_narrative_and_source_observations(
 def test_synthesize_passes_rendered_prompt_to_synthesizer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("RIVERMIND_KEY", "test-key")
+    monkeypatch.setenv("RIVERMIND_API_KEY", "test-key")
     store = _FakeStore()
     _seed_observation(store, id_="obs-1", content="visited Acme HQ", observed_at=_t())
 
@@ -203,7 +203,7 @@ def test_synthesize_passes_rendered_prompt_to_synthesizer(
 def test_synthesize_marks_prior_narrative_superseded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("RIVERMIND_KEY", "test-key")
+    monkeypatch.setenv("RIVERMIND_API_KEY", "test-key")
     store = _FakeStore()
     _seed_observation(store, id_="obs-1", content="anything", observed_at=_t())
 
@@ -236,7 +236,7 @@ def test_synthesize_marks_prior_narrative_superseded(
 def test_synthesize_does_not_touch_narrative_for_different_topic(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("RIVERMIND_KEY", "test-key")
+    monkeypatch.setenv("RIVERMIND_API_KEY", "test-key")
     store = _FakeStore()
     _seed_observation(store, id_="obs-1", content="x", observed_at=_t())
 
@@ -265,7 +265,7 @@ def test_synthesize_does_not_touch_narrative_for_different_topic(
 def test_synthesize_does_not_touch_narrative_with_different_period(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("RIVERMIND_KEY", "test-key")
+    monkeypatch.setenv("RIVERMIND_API_KEY", "test-key")
     store = _FakeStore()
     _seed_observation(store, id_="obs-1", content="x", observed_at=_t())
 
