@@ -11,7 +11,7 @@ import json
 import sqlite3
 from typing import TYPE_CHECKING, Any, Self
 
-from rivermind.adapters.stores.migrations import apply_migrations
+from rivermind.adapters.stores.migrations import apply_migrations, current_version
 from rivermind.core.interfaces import MemoryStore
 from rivermind.core.models import Narrative, Observation, State
 
@@ -176,6 +176,9 @@ class SQLiteMemoryStore(MemoryStore):
                     narrative.superseded_by,
                 ),
             )
+
+    def schema_version(self) -> int:
+        return current_version(self._conn)
 
     def get_narratives(
         self,

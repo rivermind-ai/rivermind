@@ -92,3 +92,7 @@ class Engine:
         """
         matches = self._store.get_narratives(period_start, period_end, topic)
         return matches[0] if matches else None
+
+    def schema_version(self) -> int:
+        """Return the currently-applied schema version of the backing store."""
+        return self._store.schema_version()

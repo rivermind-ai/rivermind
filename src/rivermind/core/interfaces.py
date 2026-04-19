@@ -108,6 +108,14 @@ class MemoryStore(Protocol):
         """
         ...
 
+    def schema_version(self) -> int:
+        """Return the currently-applied schema version (0 if no schema yet).
+
+        Used by health checks and migration logic to confirm the store is
+        usable and at a known version.
+        """
+        ...
+
 
 @runtime_checkable
 class Embedder(Protocol):
