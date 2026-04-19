@@ -14,7 +14,7 @@ from rivermind.adapters.stores.sqlite import SQLiteMemoryStore
 from rivermind.adapters.transports import mcp as mcp_module
 from rivermind.adapters.transports.mcp import create_app
 from rivermind.core.engine import Engine
-from rivermind.core.models import Kind, Observation, State
+from rivermind.core.models import Kind, Narrative, Observation, State
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -79,22 +79,13 @@ async def test_four_tool_stubs_are_registered(engine: Engine) -> None:
 
 
 @pytest.mark.asyncio
-async def test_remaining_tool_stubs_return_not_implemented(engine: Engine) -> None:
-    app = create_app(engine)
-    mcp = app.state.mcp
-    for name in ("get_narrative",):
-        payload = _tool_payload(await mcp.call_tool(name, {}))
-        assert payload["status"] == "not_implemented"
-
-
-@pytest.mark.asyncio
 async def test_tool_call_emits_structured_log(engine: Engine) -> None:
     cap = structlog.testing.LogCapture()
     structlog.configure(processors=[cap])
     try:
         app = create_app(engine)
         mcp = app.state.mcp
-        await mcp.call_tool("get_narrative", {})
+        await mcp.call_tool("get_current_state", {})
     finally:
         structlog.reset_defaults()
 
@@ -102,7 +93,7 @@ async def test_tool_call_emits_structured_log(engine: Engine) -> None:
     assert "tool_call_start" in events
     assert "tool_call_end" in events
     ends = [e for e in cap.entries if e["event"] == "tool_call_end"]
-    assert ends[-1]["tool"] == "get_narrative"
+    assert ends[-1]["tool"] == "get_current_state"
     assert "duration_ms" in ends[-1]
     assert "request_id" in ends[-1]
 
@@ -647,3 +638,261 @@ async def test_get_current_state_rows_include_source_observation(engine: Engine)
     app = create_app(engine)
     payload = _tool_payload(await app.state.mcp.call_tool("get_current_state", {}))
     assert all(s["source_observation"].startswith("obs-") for s in payload["states"])
+
+
+# ---- get_narrative tool ----------------------------------------------------
+
+
+_FIXED_NOW = datetime(2026, 4, 18, 12, 0, 0, tzinfo=UTC)
+
+
+def _freeze_now(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(mcp_module, "_now", lambda: _FIXED_NOW)
+
+
+def _save_narrative(
+    engine: Engine,
+    *,
+    id_: str,
+    period_start: datetime,
+    period_end: datetime,
+    topic: str | None = None,
+    generated_at: datetime | None = None,
+    superseded_by: str | None = None,
+    source_observations: list[str] | None = None,
+) -> None:
+    engine._store.save_narrative(
+        Narrative(
+            id=id_,
+            content=f"summary for {id_}",
+            topic=topic,
+            period_start=period_start,
+            period_end=period_end,
+            source_observations=source_observations or [],
+            generated_at=generated_at or _FIXED_NOW,
+            superseded_by=superseded_by,
+        )
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_last_week_hit(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
+    _freeze_now(monkeypatch)
+    _save_narrative(
+        engine,
+        id_="nar-1",
+        period_start=_FIXED_NOW - timedelta(days=7),
+        period_end=_FIXED_NOW - timedelta(days=1),
+        topic="career",
+        source_observations=["obs-1", "obs-2"],
+    )
+    app = create_app(engine)
+    payload = _tool_payload(await app.state.mcp.call_tool("get_narrative", {"period": "last_week"}))
+    assert payload["narrative"] is not None
+    narr = payload["narrative"]
+    for field in ("content", "period_start", "period_end", "source_observations", "generated_at"):
+        assert field in narr
+    assert narr["source_observations"] == ["obs-1", "obs-2"]
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_last_month_resolves_window(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _freeze_now(monkeypatch)
+    _save_narrative(
+        engine,
+        id_="nar-1",
+        period_start=_FIXED_NOW - timedelta(days=25),
+        period_end=_FIXED_NOW - timedelta(days=20),
+    )
+    _save_narrative(
+        engine,
+        id_="nar-2",
+        period_start=_FIXED_NOW - timedelta(days=60),
+        period_end=_FIXED_NOW - timedelta(days=55),
+    )
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool("get_narrative", {"period": "last_month"})
+    )
+    assert payload["narrative"]["id"] == "nar-1"
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_last_quarter_hit(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _freeze_now(monkeypatch)
+    _save_narrative(
+        engine,
+        id_="nar-q",
+        period_start=_FIXED_NOW - timedelta(days=60),
+        period_end=_FIXED_NOW - timedelta(days=55),
+    )
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool("get_narrative", {"period": "last_quarter"})
+    )
+    assert payload["narrative"]["id"] == "nar-q"
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_iso_interval(engine: Engine) -> None:
+    period_start = datetime(2026, 3, 1, tzinfo=UTC)
+    period_end = datetime(2026, 3, 8, tzinfo=UTC)
+    _save_narrative(engine, id_="nar-iso", period_start=period_start, period_end=period_end)
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_narrative",
+            {"period": "2026-02-28T00:00:00+00:00/2026-03-10T00:00:00+00:00"},
+        )
+    )
+    assert payload["narrative"]["id"] == "nar-iso"
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_miss_returns_null_not_error(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _freeze_now(monkeypatch)
+    app = create_app(engine)
+    payload = _tool_payload(await app.state.mcp.call_tool("get_narrative", {"period": "last_week"}))
+    assert payload["narrative"] is None
+    assert "no narrative" in payload["message"]
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_topic_exact_match_miss(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _freeze_now(monkeypatch)
+    _save_narrative(
+        engine,
+        id_="nar-career",
+        topic="career",
+        period_start=_FIXED_NOW - timedelta(days=3),
+        period_end=_FIXED_NOW - timedelta(days=1),
+    )
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_narrative",
+            {"period": "last_week", "topic": "fitness"},
+        )
+    )
+    assert payload["narrative"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_no_overlap(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
+    _freeze_now(monkeypatch)
+    _save_narrative(
+        engine,
+        id_="nar-past",
+        period_start=_FIXED_NOW - timedelta(days=60),
+        period_end=_FIXED_NOW - timedelta(days=50),
+    )
+    app = create_app(engine)
+    payload = _tool_payload(await app.state.mcp.call_tool("get_narrative", {"period": "last_week"}))
+    assert payload["narrative"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_excludes_superseded_by_default(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _freeze_now(monkeypatch)
+    _save_narrative(
+        engine,
+        id_="nar-new",
+        period_start=_FIXED_NOW - timedelta(days=3),
+        period_end=_FIXED_NOW - timedelta(days=1),
+        generated_at=_FIXED_NOW - timedelta(hours=1),
+    )
+    _save_narrative(
+        engine,
+        id_="nar-old",
+        period_start=_FIXED_NOW - timedelta(days=3),
+        period_end=_FIXED_NOW - timedelta(days=1),
+        generated_at=_FIXED_NOW - timedelta(hours=3),
+        superseded_by="nar-new",
+    )
+    app = create_app(engine)
+    payload = _tool_payload(await app.state.mcp.call_tool("get_narrative", {"period": "last_week"}))
+    assert payload["narrative"]["id"] == "nar-new"
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_include_superseded_can_return_older(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _freeze_now(monkeypatch)
+    _save_narrative(
+        engine,
+        id_="nar-new",
+        period_start=_FIXED_NOW - timedelta(days=3),
+        period_end=_FIXED_NOW - timedelta(days=1),
+        generated_at=_FIXED_NOW - timedelta(hours=3),
+    )
+    _save_narrative(
+        engine,
+        id_="nar-old",
+        period_start=_FIXED_NOW - timedelta(days=3),
+        period_end=_FIXED_NOW - timedelta(days=1),
+        generated_at=_FIXED_NOW - timedelta(hours=5),
+        superseded_by="nar-new",
+    )
+    app = create_app(engine)
+    # With include_superseded=True, both are considered; most recent
+    # generated_at still wins — nar-new here.
+    payload = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_narrative",
+            {"period": "last_week", "include_superseded": True},
+        )
+    )
+    assert payload["narrative"]["id"] == "nar-new"
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_bad_period_is_rejected(engine: Engine) -> None:
+    app = create_app(engine)
+    with pytest.raises(Exception) as excinfo:
+        await app.state.mcp.call_tool("get_narrative", {"period": "last_century"})
+    msg = str(excinfo.value).lower()
+    assert "validation" in msg and "period" in msg
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_bad_iso_interval_is_rejected(engine: Engine) -> None:
+    app = create_app(engine)
+    with pytest.raises(Exception) as excinfo:
+        await app.state.mcp.call_tool("get_narrative", {"period": "not-a-date/also-not"})
+    msg = str(excinfo.value).lower()
+    assert "validation" in msg and "period" in msg
+
+
+@pytest.mark.asyncio
+async def test_get_narrative_most_recent_generated_at_wins(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _freeze_now(monkeypatch)
+    _save_narrative(
+        engine,
+        id_="nar-older",
+        period_start=_FIXED_NOW - timedelta(days=3),
+        period_end=_FIXED_NOW - timedelta(days=1),
+        generated_at=_FIXED_NOW - timedelta(hours=10),
+    )
+    _save_narrative(
+        engine,
+        id_="nar-newer",
+        period_start=_FIXED_NOW - timedelta(days=3),
+        period_end=_FIXED_NOW - timedelta(days=1),
+        generated_at=_FIXED_NOW - timedelta(hours=1),
+    )
+    app = create_app(engine)
+    payload = _tool_payload(await app.state.mcp.call_tool("get_narrative", {"period": "last_week"}))
+    assert payload["narrative"]["id"] == "nar-newer"

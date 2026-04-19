@@ -104,6 +104,8 @@ class MemoryStore(Protocol):
         period_start: datetime,
         period_end: datetime,
         topic: str | None = None,
+        *,
+        include_superseded: bool = False,
     ) -> list[Narrative]:
         """Return narratives whose ``[period_start, period_end]`` window
         overlaps the requested range.
@@ -112,6 +114,9 @@ class MemoryStore(Protocol):
         ``Narrative.topic`` field (not a content search). Results are
         ordered by ``generated_at`` descending so the most recent synthesis
         comes first.
+
+        By default, narratives whose ``superseded_by`` is non-null are
+        filtered out; pass ``include_superseded=True`` to include them.
         """
         ...
 

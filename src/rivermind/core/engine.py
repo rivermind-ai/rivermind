@@ -92,15 +92,23 @@ class Engine:
         period_start: datetime,
         period_end: datetime,
         topic: str | None = None,
+        *,
+        include_superseded: bool = False,
     ) -> Narrative | None:
         """Return the most recent narrative whose window overlaps
         ``[period_start, period_end]``, optionally filtered by ``topic``.
 
         The store returns matches in ``generated_at`` descending order; this
         method picks the first (most recent) or returns ``None`` if no
-        narrative overlaps.
+        narrative overlaps. ``include_superseded`` opts in to narratives
+        whose ``superseded_by`` is non-null.
         """
-        matches = self._store.get_narratives(period_start, period_end, topic)
+        matches = self._store.get_narratives(
+            period_start,
+            period_end,
+            topic,
+            include_superseded=include_superseded,
+        )
         return matches[0] if matches else None
 
     def schema_version(self) -> int:

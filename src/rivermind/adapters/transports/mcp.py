@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from functools import wraps
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
@@ -28,11 +28,6 @@ if TYPE_CHECKING:
 
 _logger = structlog.get_logger()
 
-_NOT_IMPLEMENTED_PAYLOAD: dict[str, Any] = {
-    "status": "not_implemented",
-    "detail": "tool stub — real handler lands in a follow-up change",
-}
-
 
 def _parse_iso8601(value: str, *, field: str, tool: str) -> datetime:
     try:
@@ -40,6 +35,58 @@ def _parse_iso8601(value: str, *, field: str, tool: str) -> datetime:
     except ValueError as exc:
         error = [{"field": field, "msg": f"not a valid ISO-8601 datetime: {exc}"}]
         raise ValueError(f"{tool} validation failed: {error}") from exc
+
+
+def _now() -> datetime:
+    """Return the current moment. Separated so tests can monkeypatch it."""
+    return datetime.now(UTC)
+
+
+_PERIOD_KEYWORDS: dict[str, timedelta] = {
+    "last_week": timedelta(days=7),
+    "last_month": timedelta(days=30),
+    "last_quarter": timedelta(days=90),
+}
+
+
+def _parse_period(value: str) -> tuple[datetime, datetime]:
+    """Resolve a ``period`` string into a ``(start, end)`` window.
+
+    Accepts one of the keywords ``last_week`` / ``last_month`` /
+    ``last_quarter`` (rolling windows ending at :func:`_now`), or an ISO
+    8601 interval of the form ``<start>/<end>``. Anything else raises a
+    ``ValueError`` whose message lists the accepted forms.
+    """
+    if value in _PERIOD_KEYWORDS:
+        end = _now()
+        return end - _PERIOD_KEYWORDS[value], end
+    if "/" in value:
+        start_str, _, end_str = value.partition("/")
+        try:
+            start = datetime.fromisoformat(start_str)
+            end = datetime.fromisoformat(end_str)
+        except ValueError as exc:
+            error = [
+                {
+                    "field": "period",
+                    "msg": (
+                        "ISO 8601 interval could not be parsed. "
+                        "Expected '<start>/<end>' with ISO-8601 datetimes."
+                    ),
+                }
+            ]
+            raise ValueError(f"get_narrative validation failed: {error}") from exc
+        return start, end
+    error = [
+        {
+            "field": "period",
+            "msg": (
+                "must be one of 'last_week', 'last_month', 'last_quarter' "
+                "or an ISO 8601 interval '<start>/<end>'"
+            ),
+        }
+    ]
+    raise ValueError(f"get_narrative validation failed: {error}")
 
 
 def _log_tool_call(
@@ -192,11 +239,35 @@ def create_app(engine: Engine) -> FastAPI:
 
     @mcp.tool(
         name="get_narrative",
-        description="Return the most recent narrative for a time window.",
+        description=(
+            "Return the most recent narrative covering a time window. "
+            "period can be a keyword ('last_week', 'last_month', 'last_quarter' "
+            "are rolling windows ending now) or an ISO 8601 interval of the form "
+            "'<start>/<end>'. topic is an exact match filter. "
+            'Does NOT trigger synthesis. Returns {"narrative": null, "message": ...} '
+            "when no narrative exists; fall back to get_timeline in that case. "
+            "include_superseded opts in to older versions for audit."
+        ),
     )
     @_log_tool_call("get_narrative")
-    async def get_narrative() -> dict[str, Any]:
-        return _NOT_IMPLEMENTED_PAYLOAD
+    async def get_narrative(
+        period: str,
+        topic: str | None = None,
+        include_superseded: bool = False,
+    ) -> dict[str, Any]:
+        start, end = _parse_period(period)
+        result = engine.get_narrative(
+            start,
+            end,
+            topic,
+            include_superseded=include_superseded,
+        )
+        if result is None:
+            return {
+                "narrative": None,
+                "message": "no narrative for the requested period and topic",
+            }
+        return {"narrative": result.model_dump(mode="json")}
 
     app = FastAPI(title="rivermind", version="0.0.1")
 
