@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import pytest
+
 from rivermind.core.interfaces import MemoryStore
 from rivermind.core.models import Kind, Narrative, Observation, State
 
@@ -496,6 +498,46 @@ class MemoryStoreContractTests:
         assert store.get_narratives(t(-60), t(120), topic="career") != []
         # "Acme" is in content but not in topic; topic filter should miss
         assert store.get_narratives(t(-60), t(120), topic="Acme") == []
+
+    def test_mark_narrative_superseded_sets_pointer(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        store.save_narrative(
+            Narrative(
+                id="nar-old",
+                content="older",
+                period_start=t(0),
+                period_end=t(60),
+                source_observations=[],
+            )
+        )
+        store.save_narrative(
+            Narrative(
+                id="nar-new",
+                content="newer",
+                period_start=t(0),
+                period_end=t(60),
+                source_observations=[],
+                generated_at=t(120),
+            )
+        )
+        store.mark_narrative_superseded("nar-old", "nar-new")
+        visible = {n.id for n in store.get_narratives(t(-60), t(120))}
+        assert visible == {"nar-new"}
+        full = {
+            n.id: n.superseded_by
+            for n in store.get_narratives(t(-60), t(120), include_superseded=True)
+        }
+        assert full == {"nar-new": None, "nar-old": "nar-new"}
+
+    def test_mark_narrative_superseded_raises_on_unknown_id(
+        self,
+        store: MemoryStore,
+    ) -> None:
+        with pytest.raises(ValueError):
+            store.mark_narrative_superseded("nar-does-not-exist", "nar-also-missing")
 
     # ---- schema_version ---------------------------------------------------
 

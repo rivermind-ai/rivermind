@@ -103,7 +103,15 @@ class MemoryStore(Protocol):
 
         Narratives are versioned, never mutated in place. To replace one,
         save a new narrative and separately set the old narrative's
-        ``superseded_by`` pointer.
+        ``superseded_by`` pointer via :meth:`mark_narrative_superseded`.
+        """
+        ...
+
+    def mark_narrative_superseded(self, old_id: str, new_id: str) -> None:
+        """Set ``superseded_by = new_id`` on narrative ``old_id``.
+
+        Raises if either id is unknown. Leaves ``generated_at`` and every
+        other column on the old narrative untouched.
         """
         ...
 
@@ -160,9 +168,8 @@ class Extractor(Protocol):
     """Produces a single ``Observation`` from a rendered excerpt of prior
     observations.
 
-    In v0.1 this is used only by narrative synthesis; primary extraction at
-    the MCP tool-call site is done by the calling LLM via a strict JSON
-    schema and does not go through this interface.
+    Not used on the main write path; reserved for future extractor-style
+    pipelines (e.g., extracting structured observations from raw user text).
     """
 
     def extract(self, excerpt: str) -> Observation:
@@ -170,6 +177,20 @@ class Extractor(Protocol):
 
         Implementations own the prompt and the schema enforcement.
         """
+        ...
+
+
+@runtime_checkable
+class NarrativeSynthesizer(Protocol):
+    """Free-form text synthesizer used by the narrative projector.
+
+    Given a fully-rendered prompt (template + observations in the period),
+    returns the narrative body string. Provider-specific adapters
+    (Anthropic, OpenAI, etc.) implement this Protocol.
+    """
+
+    def synthesize(self, prompt: str) -> str:
+        """Return the synthesized narrative text."""
         ...
 
 
