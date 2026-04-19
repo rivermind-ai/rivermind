@@ -174,11 +174,21 @@ def create_app(engine: Engine) -> FastAPI:
 
     @mcp.tool(
         name="get_current_state",
-        description="Return current (subject, attribute) state rows.",
+        description=(
+            "Return current (subject, attribute) state rows. Hit this first when "
+            "answering questions about present truth (e.g., 'where does the user work?'); "
+            "each row carries a source_observation id so callers can drill back to the "
+            "originating observation. Filter by subject and/or attribute, or omit both "
+            "to return every row. Empty results are normal, not errors."
+        ),
     )
     @_log_tool_call("get_current_state")
-    async def get_current_state() -> dict[str, Any]:
-        return _NOT_IMPLEMENTED_PAYLOAD
+    async def get_current_state(
+        subject: str | None = None,
+        attribute: str | None = None,
+    ) -> dict[str, Any]:
+        rows = engine.get_current_state(subject=subject, attribute=attribute)
+        return {"states": [s.model_dump(mode="json") for s in rows]}
 
     @mcp.tool(
         name="get_narrative",

@@ -14,7 +14,7 @@ from rivermind.adapters.stores.sqlite import SQLiteMemoryStore
 from rivermind.adapters.transports import mcp as mcp_module
 from rivermind.adapters.transports.mcp import create_app
 from rivermind.core.engine import Engine
-from rivermind.core.models import Kind, Observation
+from rivermind.core.models import Kind, Observation, State
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -82,7 +82,7 @@ async def test_four_tool_stubs_are_registered(engine: Engine) -> None:
 async def test_remaining_tool_stubs_return_not_implemented(engine: Engine) -> None:
     app = create_app(engine)
     mcp = app.state.mcp
-    for name in ("get_current_state", "get_narrative"):
+    for name in ("get_narrative",):
         payload = _tool_payload(await mcp.call_tool(name, {}))
         assert payload["status"] == "not_implemented"
 
@@ -94,7 +94,7 @@ async def test_tool_call_emits_structured_log(engine: Engine) -> None:
     try:
         app = create_app(engine)
         mcp = app.state.mcp
-        await mcp.call_tool("get_current_state", {})
+        await mcp.call_tool("get_narrative", {})
     finally:
         structlog.reset_defaults()
 
@@ -102,7 +102,7 @@ async def test_tool_call_emits_structured_log(engine: Engine) -> None:
     assert "tool_call_start" in events
     assert "tool_call_end" in events
     ends = [e for e in cap.entries if e["event"] == "tool_call_end"]
-    assert ends[-1]["tool"] == "get_current_state"
+    assert ends[-1]["tool"] == "get_narrative"
     assert "duration_ms" in ends[-1]
     assert "request_id" in ends[-1]
 
@@ -526,3 +526,124 @@ def _fact_observation(
         observed_at=anchor,
         superseded_by=superseded_by,
     )
+
+
+# ---- get_current_state tool -----------------------------------------------
+
+
+def _seed_state(
+    engine: Engine,
+    *,
+    subject: str,
+    attribute: str,
+    value: str,
+    offset: int = 0,
+) -> str:
+    anchor = datetime(2026, 4, 18, 12, 0, 0, tzinfo=UTC) + timedelta(seconds=offset)
+    obs = Observation(
+        id=f"obs-seed-{subject}-{attribute}",
+        content=f"{subject} {attribute} is {value}",
+        kind=Kind.FACT,
+        subject=subject,
+        attribute=attribute,
+        value=value,
+        observed_at=anchor,
+    )
+    engine.record_observation(obs)
+    engine._store.upsert_state(
+        State(
+            subject=subject,
+            attribute=attribute,
+            current_value=value,
+            current_since=anchor,
+            source_observation=obs.id,
+        )
+    )
+    return obs.id
+
+
+@pytest.mark.asyncio
+async def test_get_current_state_empty_returns_empty_list(engine: Engine) -> None:
+    app = create_app(engine)
+    payload = _tool_payload(await app.state.mcp.call_tool("get_current_state", {}))
+    assert payload == {"states": []}
+
+
+@pytest.mark.asyncio
+async def test_get_current_state_no_filter_returns_all(engine: Engine) -> None:
+    _seed_state(engine, subject="user", attribute="employer", value="Acme")
+    _seed_state(engine, subject="user", attribute="role", value="staff", offset=1)
+    _seed_state(engine, subject="team", attribute="employer", value="Globex", offset=2)
+
+    app = create_app(engine)
+    payload = _tool_payload(await app.state.mcp.call_tool("get_current_state", {}))
+    pairs = {(s["subject"], s["attribute"]) for s in payload["states"]}
+    assert pairs == {
+        ("user", "employer"),
+        ("user", "role"),
+        ("team", "employer"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_get_current_state_filter_by_subject(engine: Engine) -> None:
+    _seed_state(engine, subject="user", attribute="employer", value="Acme")
+    _seed_state(engine, subject="user", attribute="role", value="staff", offset=1)
+    _seed_state(engine, subject="team", attribute="employer", value="Globex", offset=2)
+
+    app = create_app(engine)
+    payload = _tool_payload(await app.state.mcp.call_tool("get_current_state", {"subject": "user"}))
+    attrs = {s["attribute"] for s in payload["states"]}
+    assert attrs == {"employer", "role"}
+
+
+@pytest.mark.asyncio
+async def test_get_current_state_filter_by_attribute(engine: Engine) -> None:
+    _seed_state(engine, subject="user", attribute="employer", value="Acme")
+    _seed_state(engine, subject="team", attribute="employer", value="Globex", offset=1)
+
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool("get_current_state", {"attribute": "employer"})
+    )
+    subjects = {s["subject"] for s in payload["states"]}
+    assert subjects == {"user", "team"}
+
+
+@pytest.mark.asyncio
+async def test_get_current_state_filter_by_both_hit(engine: Engine) -> None:
+    source_id = _seed_state(engine, subject="user", attribute="employer", value="Acme")
+
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_current_state",
+            {"subject": "user", "attribute": "employer"},
+        )
+    )
+    assert len(payload["states"]) == 1
+    row = payload["states"][0]
+    assert row["current_value"] == "Acme"
+    assert row["source_observation"] == source_id
+
+
+@pytest.mark.asyncio
+async def test_get_current_state_filter_by_both_miss_is_not_error(engine: Engine) -> None:
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool(
+            "get_current_state",
+            {"subject": "nobody", "attribute": "nothing"},
+        )
+    )
+    assert payload == {"states": []}
+
+
+@pytest.mark.asyncio
+async def test_get_current_state_rows_include_source_observation(engine: Engine) -> None:
+    _seed_state(engine, subject="user", attribute="employer", value="Acme")
+    _seed_state(engine, subject="user", attribute="role", value="staff", offset=1)
+
+    app = create_app(engine)
+    payload = _tool_payload(await app.state.mcp.call_tool("get_current_state", {}))
+    assert all(s["source_observation"].startswith("obs-") for s in payload["states"])
