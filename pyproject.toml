@@ -40,7 +40,12 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
     "pytest-asyncio>=0.23",
+    "anthropic>=0.30",
+    "openai>=1.0",
 ]
+anthropic = ["anthropic>=0.30"]
+openai = ["openai>=1.0"]
+llm = ["anthropic>=0.30", "openai>=1.0"]
 
 [project.urls]
 Homepage = "https://github.com/rivermind-ai/rivermind"

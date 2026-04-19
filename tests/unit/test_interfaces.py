@@ -53,6 +53,9 @@ class _StubMemoryStore:
     def save_narrative(self, narrative: Narrative) -> None:
         pass
 
+    def mark_narrative_superseded(self, old_id: str, new_id: str) -> None:
+        pass
+
     def get_narratives(
         self,
         period_start: datetime,
@@ -111,6 +114,7 @@ def test_memory_store_method_names() -> None:
         "list_states",
         "clear_state",
         "save_narrative",
+        "mark_narrative_superseded",
         "get_narratives",
         "schema_version",
     }

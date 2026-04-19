@@ -91,6 +91,13 @@ class _RecordingStore:
     def save_narrative(self, narrative: Narrative) -> None:
         self._narratives.append(narrative)
 
+    def mark_narrative_superseded(self, old_id: str, new_id: str) -> None:
+        for i, n in enumerate(self._narratives):
+            if n.id == old_id:
+                self._narratives[i] = n.model_copy(update={"superseded_by": new_id})
+                return
+        raise ValueError(f"narrative {old_id!r} not found")
+
     def get_narratives(
         self,
         period_start: datetime,

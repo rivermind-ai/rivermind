@@ -185,6 +185,15 @@ class SQLiteMemoryStore(MemoryStore):
                 ),
             )
 
+    def mark_narrative_superseded(self, old_id: str, new_id: str) -> None:
+        with self._conn:
+            cur = self._conn.execute(
+                "UPDATE narratives SET superseded_by = ? WHERE id = ?",
+                (new_id, old_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(f"narrative {old_id!r} not found")
+
     def schema_version(self) -> int:
         return current_version(self._conn)
 
