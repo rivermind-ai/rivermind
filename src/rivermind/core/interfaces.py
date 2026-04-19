@@ -71,6 +71,18 @@ class MemoryStore(Protocol):
         """Return the current state for ``(subject, attribute)`` or ``None``."""
         ...
 
+    def list_states(
+        self,
+        subject: str | None = None,
+        attribute: str | None = None,
+    ) -> list[State]:
+        """Return state rows filtered by optional ``subject`` and/or ``attribute``.
+
+        With neither filter, returns every row. Results are ordered by
+        ``(subject, attribute)`` ascending for stability.
+        """
+        ...
+
     def save_narrative(self, narrative: Narrative) -> None:
         """Persist a synthesized narrative.
 
