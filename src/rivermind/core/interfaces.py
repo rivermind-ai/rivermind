@@ -40,7 +40,17 @@ class MemoryStore(Protocol):
 
         Observations are immutable once saved. The one permitted update is
         setting ``superseded_by`` on an existing fact observation, which is
-        handled via a separate write path (not this method).
+        handled via :meth:`mark_observation_superseded`.
+        """
+        ...
+
+    def mark_observation_superseded(self, old_id: str, new_id: str) -> None:
+        """Set ``superseded_by = new_id`` on fact observation ``old_id``.
+
+        Raises ``ValueError`` if ``old_id`` is unknown. The DB-level CHECK
+        constraint restricts ``superseded_by`` to fact observations; calling
+        this against an event or reflection raises an integrity error at
+        the adapter layer.
         """
         ...
 

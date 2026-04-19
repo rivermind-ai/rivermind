@@ -45,6 +45,13 @@ class _FakeStore:
     def save_observation(self, observation: Observation) -> None:
         self.observations.append(observation)
 
+    def mark_observation_superseded(self, old_id: str, new_id: str) -> None:
+        for i, o in enumerate(self.observations):
+            if o.id == old_id:
+                self.observations[i] = o.model_copy(update={"superseded_by": new_id})
+                return
+        raise ValueError(f"observation {old_id!r} not found")
+
     def get_observations(
         self,
         start: datetime,

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 import structlog
 
+from rivermind.core.projectors.compaction import compact
 from rivermind.core.projectors.narrative import synthesize_narrative
 from rivermind.core.projectors.state import rebuild_state
 
@@ -88,11 +89,6 @@ def _weeks_needing_reeval(
     return [pair for pair in sorted(weeks) if not store.reeval_exists(*pair)]
 
 
-def _compact(store: MemoryStore) -> None:
-    """Compact observations. Currently a no-op; body is replaced later."""
-    _logger.info("reeval_compaction_skipped", reason="not implemented")
-
-
 def _silent_progress(_done: int, _total: int) -> None:
     """Progress callback for :func:`rebuild_state` when run inside re-eval."""
 
@@ -145,11 +141,16 @@ def run_reeval(
 
     log.info("reeval_compaction_start")
     try:
-        _compact(store)
+        comp = compact(store)
+        log.info(
+            "reeval_compaction_end",
+            superseded_count=comp.superseded_count,
+            deduped_count=comp.deduped_count,
+        )
+        warnings.extend(comp.warnings)
     except Exception as exc:
         log.exception("reeval_compaction_error")
         warnings.append(f"compaction failed: {exc}")
-    log.info("reeval_compaction_end")
 
     log.info("reeval_state_rebuild_start")
     try:
