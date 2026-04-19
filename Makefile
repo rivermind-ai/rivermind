@@ -27,8 +27,8 @@ lint:  ## Run ruff check, ruff format --check, and mypy
 format:  ## Autoformat with ruff
 	$(BIN)/ruff format .
 
-dev:  ## Run rivermind serve against a local dev DB
-	RIVERMIND_DB_PATH=$(DEV_DB) $(BIN)/rivermind serve
+dev:  ## Run rivermind server against a local dev DB
+	$(BIN)/python -m rivermind --port 8080 --db $(DEV_DB)
 
 clean:  ## Remove caches, venv, build artifacts, and local dev DB
 	rm -rf $(VENV) .pytest_cache .mypy_cache .ruff_cache

@@ -7,6 +7,7 @@ FastAPI app. The app mounts the MCP streamable HTTP transport under
 
 from __future__ import annotations
 
+import contextlib
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -22,7 +23,7 @@ from rivermind.core.ids import new_observation_id
 from rivermind.core.models import Kind, Observation
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
     from rivermind.core.engine import Engine
 
@@ -131,7 +132,9 @@ def create_app(engine: Engine) -> FastAPI:
     no module-level state and no singleton. Tests instantiate this factory
     with a fake engine to exercise the transport in isolation.
     """
-    mcp = FastMCP("rivermind")
+    # Collapse the default FastMCP path so mounting at "/mcp" exposes the
+    # handler at "/mcp" rather than "/mcp/mcp".
+    mcp = FastMCP("rivermind", streamable_http_path="/")
 
     @mcp.tool(
         name="record_observation",
@@ -269,7 +272,18 @@ def create_app(engine: Engine) -> FastAPI:
             }
         return {"narrative": result.model_dump(mode="json")}
 
-    app = FastAPI(title="rivermind", version="0.0.1")
+    mcp_asgi = mcp.streamable_http_app()
+
+    @contextlib.asynccontextmanager
+    async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        # FastMCP's streamable HTTP transport relies on a session manager
+        # running inside a task group. Mounting a Starlette app on FastAPI
+        # does not run its lifespan automatically, so we explicitly enter
+        # the FastMCP lifespan context here.
+        async with mcp.session_manager.run():
+            yield
+
+    app = FastAPI(title="rivermind", version="0.0.1", lifespan=_lifespan)
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
@@ -282,7 +296,7 @@ def create_app(engine: Engine) -> FastAPI:
             _logger.exception("health_check_failed", error=str(exc))
         return {"status": status, "schema_version": version}
 
-    app.mount("/mcp", mcp.streamable_http_app())
+    app.mount("/mcp", mcp_asgi)
     app.state.mcp = mcp
     app.state.engine = engine
     return app

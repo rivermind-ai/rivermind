@@ -9,23 +9,33 @@
 ## Install
 
 ```bash
-# TODO
+git clone https://github.com/rivermind-ai/rivermind.git
+cd rivermind
+make install
+source .venv/bin/activate
 ```
 
 ## Usage
 
+Start the server and connect Claude Desktop in under three minutes: see the [Claude Desktop quickstart](./docs/quickstart-claude.md).
+
 ```bash
-# TODO
+python -m rivermind            # starts on http://127.0.0.1:8080
+./scripts/smoke_claude.sh      # verifies the server is reachable
 ```
 
 ## Development
 
 ```bash
-# TODO: clone, venv, install, run tests
+make install
+make dev        # run the server against a local dev DB
+make test       # pytest
+make lint       # ruff check + ruff format --check + mypy
 ```
 
 ## Documentation
 
+- [Claude Desktop quickstart](./docs/quickstart-claude.md) — connect Claude to a local Rivermind server.
 - [Architecture](./docs/ARCHITECTURE.md) — system structure, updated as the code is written.
 
 ## License
