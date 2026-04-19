@@ -162,6 +162,10 @@ class SQLiteMemoryStore(MemoryStore):
             cur = self._conn.execute("SELECT * FROM state ORDER BY subject ASC, attribute ASC")
         return [self._row_to_state(row) for row in cur.fetchall()]
 
+    def clear_state(self) -> None:
+        with self._conn:
+            self._conn.execute("DELETE FROM state")
+
     def save_narrative(self, narrative: Narrative) -> None:
         with self._conn:
             self._conn.execute(

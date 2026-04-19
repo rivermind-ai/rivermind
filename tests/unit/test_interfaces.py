@@ -47,6 +47,9 @@ class _StubMemoryStore:
     ) -> list[State]:
         return []
 
+    def clear_state(self) -> None:
+        pass
+
     def save_narrative(self, narrative: Narrative) -> None:
         pass
 
@@ -106,6 +109,7 @@ def test_memory_store_method_names() -> None:
         "upsert_state",
         "get_state",
         "list_states",
+        "clear_state",
         "save_narrative",
         "get_narratives",
         "schema_version",

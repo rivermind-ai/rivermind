@@ -27,7 +27,7 @@ Model: `src/rivermind/core/models.py` (`Observation`, `Kind`).
 
 A flat `(subject, attribute) → current_value` table. One row per slot, always reflecting the latest fact. Used by `get_current_state` as the anti-hallucination read path. Each row carries `source_observation` so a caller can always drill back to the observation that produced the state.
 
-State is derived. If it drifts or corrupts, drop it and recompute from observations. The write-path projector (`src/rivermind/core/projectors/state.py`) upserts a state row whenever `Engine.record_observation` lands a fact; the store's stale-drop guard ensures late-arriving observations do not clobber newer state.
+State is derived. If it drifts or corrupts, drop it and recompute from observations. The write-path projector (`src/rivermind/core/projectors/state.py`) upserts a state row whenever `Engine.record_observation` lands a fact; the store's stale-drop guard ensures late-arriving observations do not clobber newer state. The same module exposes `rebuild_state(store)` for drift recovery: it clears the table and replays every non-superseded fact in `observed_at` order, returning a summary.
 
 ### Narratives — synthesized summaries
 
