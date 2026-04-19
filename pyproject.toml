@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rivermind"
-version = "0.0.1"
+version = "0.1.0a1"
 description = "Temporal memory layer for LLMs, delivered as an MCP server."
 readme = "README.md"
 requires-python = ">=3.11"
