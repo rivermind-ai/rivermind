@@ -242,18 +242,29 @@ async def test_fact_missing_attribute_is_rejected(engine: Engine) -> None:
 
 
 @pytest.mark.asyncio
-async def test_fact_missing_value_is_rejected(engine: Engine) -> None:
-    await _expect_validation_error(
-        engine,
-        {
-            "kind": "fact",
-            "content": "missing fields",
-            "observed_at": _OBSERVED_AT_ISO,
-            "subject": "user",
-            "attribute": "role",
-        },
-        expected_field="value",
+async def test_fact_without_value_is_accepted(engine: Engine) -> None:
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool(
+            "record_observation",
+            {
+                "kind": "fact",
+                "content": "user's career framework is three questions",
+                "observed_at": _OBSERVED_AT_ISO,
+                "subject": "user",
+                "attribute": "career_framework",
+            },
+        )
     )
+    assert payload["id"].startswith("obs-")
+
+    start = datetime(2026, 4, 18, 11, tzinfo=UTC)
+    end = datetime(2026, 4, 18, 13, tzinfo=UTC)
+    timeline = engine.get_timeline(start, end)
+    assert len(timeline) == 1
+    assert timeline[0].value is None
+    assert timeline[0].subject == "user"
+    assert timeline[0].attribute == "career_framework"
 
 
 @pytest.mark.asyncio

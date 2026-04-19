@@ -39,8 +39,8 @@ class Engine:
     def record_observation(self, observation: Observation) -> str:
         """Persist an observation and return its id.
 
-        Model-level invariants (kind enum, fact requires subject/attribute/
-        value, id prefix, only-facts-supersede) are enforced by Pydantic at
+        Model-level invariants (kind enum, fact requires subject/attribute,
+        id prefix, only-facts-supersede) are enforced by Pydantic at
         ``Observation`` construction time. This method does not re-validate;
         callers that build an ``Observation`` have already passed that gate.
 

@@ -140,11 +140,13 @@ def create_app(engine: Engine) -> FastAPI:
         name="record_observation",
         description=(
             "Record an observation in the temporal memory log. "
-            "Use kind='fact' for supersedable key-value state (subject, attribute, "
-            "and value are required). Use kind='event' for one-time occurrences "
-            "(no supersession). Use kind='reflection' for subjective thoughts. "
-            "observed_at is the world time the thing happened (ISO-8601 with timezone), "
-            "not the current moment. Returns the new observation's id."
+            "Use kind='fact' for supersedable key-value state (subject and "
+            "attribute required; value is optional and may be omitted when "
+            "content carries the whole payload). Use kind='event' for one-time "
+            "occurrences (no supersession). Use kind='reflection' for "
+            "subjective thoughts. observed_at is the world time the thing "
+            "happened (ISO-8601 with timezone), not the current moment. "
+            "Returns the new observation's id."
         ),
     )
     @_log_tool_call("record_observation")

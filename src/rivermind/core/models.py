@@ -53,7 +53,6 @@ class Observation(BaseModel):
                 for name, val in (
                     ("subject", self.subject),
                     ("attribute", self.attribute),
-                    ("value", self.value),
                 )
                 if val is None
             ]

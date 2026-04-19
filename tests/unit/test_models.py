@@ -17,21 +17,21 @@ def test_kind_values_match_db_strings() -> None:
     assert {k.value for k in Kind} == {"fact", "event", "reflection"}
 
 
-def test_fact_observation_requires_subject_attribute_value() -> None:
-    with pytest.raises(ValidationError, match="subject, attribute, value"):
+def test_fact_requires_subject_and_attribute() -> None:
+    with pytest.raises(ValidationError, match="subject, attribute"):
         Observation(id="obs-1", content="x", kind=Kind.FACT, observed_at=_t())
 
 
-def test_fact_requires_value_even_when_subject_and_attribute_set() -> None:
-    with pytest.raises(ValidationError, match="value"):
-        Observation(
-            id="obs-2",
-            content="x",
-            kind=Kind.FACT,
-            subject="user",
-            attribute="role",
-            observed_at=_t(),
-        )
+def test_fact_without_value_is_valid() -> None:
+    obs = Observation(
+        id="obs-2",
+        content="user's career framework is three questions",
+        kind=Kind.FACT,
+        subject="user",
+        attribute="career_framework",
+        observed_at=_t(),
+    )
+    assert obs.value is None
 
 
 def test_valid_fact_observation() -> None:
