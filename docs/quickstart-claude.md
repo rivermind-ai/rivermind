@@ -26,10 +26,10 @@ pip install rivermind
 ## 2. Start the server
 
 ```bash
-python -m rivermind
+rivermind serve
 ```
 
-You should see uvicorn log lines ending with `Application startup complete.` and `Uvicorn running on http://127.0.0.1:8080`. The SQLite database is created at `~/.rivermind/rivermind.db` by default. Pass `--db ./rivermind.db` to keep it inside the repo instead.
+You should see uvicorn log lines ending with `Application startup complete.` and `Uvicorn running on http://127.0.0.1:8080`. The SQLite database is created at `~/.rivermind/rivermind.db` by default. Pass `--db ./rivermind.db` (before the subcommand) to keep it inside the repo instead.
 
 Leave the server running in this terminal. Open a second one for the next steps.
 
@@ -179,11 +179,11 @@ Useful one-liners for daily use. All assume the server is running and Claude Des
 
 ## Troubleshooting
 
-**`python -m rivermind` fails with `ModuleNotFoundError: No module named 'rivermind'`.**
-The venv is not activated. Run `source .venv/bin/activate` or use `make dev`.
+**`rivermind: command not found`.**
+The venv is not activated. Run `source .venv/bin/activate` or use `make dev`. Equivalent: `python -m rivermind serve`.
 
 **`./scripts/smoke_claude.sh` prints `FAIL: /health returned HTTP 000`.**
-The server is not running or is bound to a different port. Check that `python -m rivermind` is still running in another terminal.
+The server is not running or is bound to a different port. Check that `rivermind serve` is still running in another terminal.
 
 **Settings → Developer shows "No servers added."**
 - The config file does not exist at the expected path, or the JSON is invalid (trailing commas silently break everything).
@@ -206,6 +206,6 @@ Run with `--db ./rivermind.db` and watch for permission errors. The default path
 
 ## What's next
 
-- Run `python -m rivermind --help` to see available flags.
+- Run `rivermind --help` to see all subcommands; `rivermind serve --help` for server flags.
 - Daily workflow: open a terminal, `source .venv/bin/activate`, `make dev`. That's it.
 - If you want the server to start with your Mac / Windows / Linux session, wrap it in a launchd / startup-task / systemd unit. Out of scope for this quickstart.
