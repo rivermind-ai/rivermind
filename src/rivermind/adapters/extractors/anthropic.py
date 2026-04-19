@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 
 _DEFAULT_MODEL = "claude-sonnet-4-6"
-_ENV_KEY = "RIVERMIND_KEY"
+_ENV_KEY = "RIVERMIND_API_KEY"
 _MAX_TOKENS = 2048
 
 

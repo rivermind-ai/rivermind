@@ -5,7 +5,7 @@ Reads observations in a time window, renders them into a prompt, calls a
 and marks any prior narrative for the same exact period + topic as
 superseded.
 
-Gated on the ``RIVERMIND_KEY`` environment variable. When unset,
+Gated on the ``RIVERMIND_API_KEY`` environment variable. When unset,
 :func:`synthesize_narrative` logs a warning and returns ``None``; no
 synthesizer is constructed, no API call is made, and no narrative is
 written. This is how the "optional, API-key gated" contract is enforced.
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 _logger = structlog.get_logger()
 
-_ENV_KEY = "RIVERMIND_KEY"
+_ENV_KEY = "RIVERMIND_API_KEY"
 _PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "narrative.md"
 
 
@@ -95,7 +95,7 @@ def synthesize_narrative(
     if os.environ.get(_ENV_KEY) is None:
         _logger.warning(
             "narrative_synthesis_skipped",
-            reason="RIVERMIND_KEY not set; narrative synthesis is disabled",
+            reason="RIVERMIND_API_KEY not set; narrative synthesis is disabled",
         )
         return None
     if synthesizer is None:

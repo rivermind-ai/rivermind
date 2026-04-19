@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 
 _DEFAULT_MODEL = "gpt-4o"
-_ENV_KEY = "RIVERMIND_KEY"
+_ENV_KEY = "RIVERMIND_API_KEY"
 
 
 class OpenAISynthesizer:
