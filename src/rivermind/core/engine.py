@@ -13,6 +13,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from rivermind.core.models import Kind
+from rivermind.core.projectors.state import project_fact
+
 if TYPE_CHECKING:
     from datetime import datetime
 
@@ -44,10 +47,14 @@ class Engine:
         ``Observation`` construction time. This method does not re-validate;
         callers that build an ``Observation`` have already passed that gate.
 
-        Does **not** write to the ``state`` projection yet; that is a later
-        addition.
+        When the observation is a fact, its ``(subject, attribute)`` slot is
+        also projected into the ``state`` table via ``project_fact``. The
+        store's stale-drop guard ensures late-arriving observations do not
+        overwrite newer state.
         """
         self._store.save_observation(observation)
+        if observation.kind is Kind.FACT:
+            project_fact(observation, self._store)
         return observation.id
 
     def get_timeline(

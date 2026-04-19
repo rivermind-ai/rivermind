@@ -27,7 +27,7 @@ Model: `src/rivermind/core/models.py` (`Observation`, `Kind`).
 
 A flat `(subject, attribute) → current_value` table. One row per slot, always reflecting the latest fact. Used by `get_current_state` as the anti-hallucination read path. Each row carries `source_observation` so a caller can always drill back to the observation that produced the state.
 
-State is derived. If it drifts or corrupts, drop it and recompute from observations. Today the write-path projector is not yet wired, so `state` is maintained manually by callers when they record facts (a known gap, see "What isn't built yet" below).
+State is derived. If it drifts or corrupts, drop it and recompute from observations. The write-path projector (`src/rivermind/core/projectors/state.py`) upserts a state row whenever `Engine.record_observation` lands a fact; the store's stale-drop guard ensures late-arriving observations do not clobber newer state.
 
 ### Narratives — synthesized summaries
 
@@ -116,7 +116,7 @@ Shared fixtures in `tests/conftest.py`: deterministic `now` / `t`, scratch `tmp_
 
 The architecture above assumes all the pieces but some are still placeholders:
 
-- **State projector on write path.** When a fact is recorded, nothing updates `state` or sets `superseded_by` on the previous fact automatically. `get_current_state` returns `[]` until a caller manually populates it. Tracked; planned.
+- **Observation-level supersession on write path.** The state projector is wired, but nothing sets `superseded_by` on the previous fact observation when a newer one arrives. That means `include_superseded=False` on `get_observations` does not yet hide old facts, even though the state table reflects only the latest.
 - **Narrative synthesis.** The read path for `get_narrative` exists, but no worker writes narratives yet. `get_narrative` returns `null` in practice.
 - **`rivermind` CLI (Click).** `python -m rivermind` is the stand-in.
 - **Embedder backends.** Protocol declared, not used.
