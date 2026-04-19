@@ -108,6 +108,15 @@ class SQLiteMemoryStore(MemoryStore):
         cur = self._conn.execute(sql, params)
         return [self._row_to_observation(row) for row in cur.fetchall()]
 
+    def mark_observation_superseded(self, old_id: str, new_id: str) -> None:
+        with self._conn:
+            cur = self._conn.execute(
+                "UPDATE observations SET superseded_by = ? WHERE id = ?",
+                (new_id, old_id),
+            )
+            if cur.rowcount == 0:
+                raise ValueError(f"observation {old_id!r} not found")
+
     def upsert_state(self, state: State) -> None:
         with self._conn:
             self._conn.execute(

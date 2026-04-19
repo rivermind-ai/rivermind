@@ -38,6 +38,14 @@ class _RecordingStore:
         self.calls.append(("save_observation", (observation,)))
         self._observations.append(observation)
 
+    def mark_observation_superseded(self, old_id: str, new_id: str) -> None:
+        self.calls.append(("mark_observation_superseded", (old_id, new_id)))
+        for i, o in enumerate(self._observations):
+            if o.id == old_id:
+                self._observations[i] = o.model_copy(update={"superseded_by": new_id})
+                return
+        raise ValueError(f"observation {old_id!r} not found")
+
     def get_observations(
         self,
         start: datetime,

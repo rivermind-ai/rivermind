@@ -23,6 +23,9 @@ class _StubMemoryStore:
     def save_observation(self, observation: Observation) -> None:
         self.last = observation
 
+    def mark_observation_superseded(self, old_id: str, new_id: str) -> None:
+        pass
+
     def get_observations(
         self,
         start: datetime,
@@ -114,6 +117,7 @@ def test_incomplete_store_is_not_an_instance() -> None:
 def test_memory_store_method_names() -> None:
     expected = {
         "save_observation",
+        "mark_observation_superseded",
         "get_observations",
         "upsert_state",
         "get_state",

@@ -539,6 +539,51 @@ class MemoryStoreContractTests:
         with pytest.raises(ValueError):
             store.mark_narrative_superseded("nar-does-not-exist", "nar-also-missing")
 
+    # ---- mark_observation_superseded --------------------------------------
+
+    def test_mark_observation_superseded_sets_pointer(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        store.save_observation(
+            Observation(
+                id="obs-older",
+                content="joined Globex",
+                kind=Kind.FACT,
+                subject="user",
+                attribute="employer",
+                value="Globex",
+                observed_at=t(0),
+            )
+        )
+        store.save_observation(
+            Observation(
+                id="obs-newer",
+                content="joined Acme",
+                kind=Kind.FACT,
+                subject="user",
+                attribute="employer",
+                value="Acme",
+                observed_at=t(3600),
+            )
+        )
+        store.mark_observation_superseded("obs-older", "obs-newer")
+        default = {o.id for o in store.get_observations(t(-60), t(7200))}
+        assert default == {"obs-newer"}
+        full = {
+            o.id: o.superseded_by
+            for o in store.get_observations(t(-60), t(7200), include_superseded=True)
+        }
+        assert full == {"obs-newer": None, "obs-older": "obs-newer"}
+
+    def test_mark_observation_superseded_raises_on_unknown_id(
+        self,
+        store: MemoryStore,
+    ) -> None:
+        with pytest.raises(ValueError):
+            store.mark_observation_superseded("obs-missing", "obs-also-missing")
+
     # ---- reeval_runs ------------------------------------------------------
 
     def test_reeval_exists_returns_false_for_missing(

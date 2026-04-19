@@ -60,6 +60,9 @@ class _FakeStore:
     def save_narrative(self, narrative: Narrative) -> None:
         self.narratives.append(narrative)
 
+    def mark_observation_superseded(self, old_id: str, new_id: str) -> None:
+        raise NotImplementedError
+
     def mark_narrative_superseded(self, old_id: str, new_id: str) -> None:
         for i, n in enumerate(self.narratives):
             if n.id == old_id:
