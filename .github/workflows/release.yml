@@ -99,23 +99,28 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install rivermind from TestPyPI (retry while the index catches up)
+      - name: Download rivermind wheel from TestPyPI (retry for cache lag)
         env:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           python -m venv /tmp/smoke
+          mkdir -p /tmp/wheels
           for attempt in 1 2 3 4 5; do
-            if /tmp/smoke/bin/pip install \
+            if /tmp/smoke/bin/pip download \
                 --index-url https://test.pypi.org/simple/ \
-                --extra-index-url https://pypi.org/simple/ \
+                --no-deps \
+                --dest /tmp/wheels \
                 "rivermind==${VERSION}"; then
               exit 0
             fi
-            echo "install attempt ${attempt} failed; sleeping 10s"
+            echo "download attempt ${attempt} failed; sleeping 10s"
             sleep 10
           done
-          echo "could not install rivermind==${VERSION} from TestPyPI after 5 attempts"
+          echo "could not download rivermind==${VERSION} from TestPyPI after 5 attempts"
           exit 1
+
+      - name: Install the wheel, resolving deps from PyPI
+        run: /tmp/smoke/bin/pip install /tmp/wheels/*.whl
 
       - name: Smoke the installed console script
         run: /tmp/smoke/bin/rivermind --help
