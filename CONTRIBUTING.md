@@ -53,6 +53,37 @@ Autoformat with `make format`. Run `make` with no arguments to see all available
 - **Feature requests** need a concrete use case. "Would be nice" is not a use case.
 - **Architectural suggestions**: open a discussion before a PR. Rivermind has load-bearing rules that aren't obvious from the code.
 
+## Releasing
+
+Releases are automated by `.github/workflows/release.yml`. Pushing a tag of the form `v*` triggers a build, publishes the artifacts to TestPyPI, installs from TestPyPI to smoke-test the console script, and (for non-pre-release tags) promotes the same artifacts to PyPI and creates a GitHub Release with auto-generated notes.
+
+**Pre-release tags go to TestPyPI only.** Anything with a hyphen or a PEP 440 pre-release suffix (`v0.1.0-alpha.1`, `v0.1.0a1`, `v0.1.0rc2`) stops after the smoke test; `publish-pypi` and `github-release` are skipped. Use this for dry runs.
+
+### One-time setup (TestPyPI and PyPI)
+
+Do this once per index before the first successful run. Trusted publishing means no secrets live in the repo.
+
+1. Register an account on both [TestPyPI](https://test.pypi.org/) and [PyPI](https://pypi.org/).
+2. Create the project page on each index (navigate to "Your projects" → "Add pending publisher" while the name is unclaimed). If `rivermind` is taken on either index, pick an alternative name and update `pyproject.toml`'s `name` field before proceeding.
+3. For each index, configure the Trusted Publisher:
+   - Owner: `rivermind-ai`
+   - Repository: `rivermind`
+   - Workflow: `release.yml`
+   - Environment: (leave blank)
+
+### Per-release checklist
+
+1. Bump `pyproject.toml` `version` using PEP 440 syntax (`0.1.0a1` for the first alpha, `0.1.0` for a final).
+2. Open a PR titled `Bump version to X.Y.Z`. Merge once CI is green.
+3. Tag the merge commit on `main`:
+   ```bash
+   git checkout main && git pull
+   git tag v0.1.0a1        # or v0.1.0-alpha.1; both normalize to the same Version
+   git push origin v0.1.0a1
+   ```
+4. Watch the **Actions** tab. Expect `build` → `publish-testpypi` → `smoke-testpypi`. For a final release, `publish-pypi` and `github-release` also run.
+5. If the tag and `pyproject.toml` version disagree, the workflow fails in the `build` job with a clear diff. Delete the tag, fix the version, retry.
+
 ## Code of Conduct
 
 By contributing, you agree to follow the [Code of Conduct](./CODE_OF_CONDUCT.md).
