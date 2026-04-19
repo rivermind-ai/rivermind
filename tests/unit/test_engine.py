@@ -84,6 +84,10 @@ class _RecordingStore:
             hits = [s for s in hits if s.attribute == attribute]
         return sorted(hits, key=lambda s: (s.subject, s.attribute))
 
+    def clear_state(self) -> None:
+        self.calls.append(("clear_state", ()))
+        self._states = []
+
     def save_narrative(self, narrative: Narrative) -> None:
         self._narratives.append(narrative)
 

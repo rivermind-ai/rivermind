@@ -90,6 +90,14 @@ class MemoryStore(Protocol):
         """
         ...
 
+    def clear_state(self) -> None:
+        """Delete every row from the ``state`` projection.
+
+        Only used for drift recovery (rebuild). Never called on the write
+        path. Observations and narratives are untouched.
+        """
+        ...
+
     def save_narrative(self, narrative: Narrative) -> None:
         """Persist a synthesized narrative.
 

@@ -415,6 +415,16 @@ class MemoryStoreContractTests:
     def test_list_states_empty_on_no_match(self, store: MemoryStore) -> None:
         assert store.list_states(subject="nobody") == []
 
+    def test_clear_state_removes_all_rows(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        self._seed_states(store, t)
+        assert store.list_states() != []
+        store.clear_state()
+        assert store.list_states() == []
+
     # ---- save_narrative / get_narratives ----------------------------------
 
     def test_save_narrative_roundtrips_source_observations(
