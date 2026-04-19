@@ -1,14 +1,9 @@
-"""Integration tests for the MCP FastAPI scaffold.
-
-The Engine is backed by a real file-backed SQLite store so the health
-endpoint exercises a genuine ``schema_version`` roundtrip. Tool
-registration is verified by asking FastMCP to list its registered tools.
-Tool bodies are stubs; their real behavior is covered by later changes.
-"""
+"""Integration tests for the MCP FastAPI transport."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import structlog
@@ -23,6 +18,14 @@ from rivermind.core.engine import Engine
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
+
+
+_OBSERVED_AT_ISO = "2026-04-18T12:00:00+00:00"
+
+
+def _tool_payload(result: Any) -> Any:
+    """Unwrap the `(content, structured)` tuple FastMCP returns from `call_tool`."""
+    return result[1] if isinstance(result, tuple) else result
 
 
 @pytest.fixture
@@ -75,19 +78,11 @@ async def test_four_tool_stubs_are_registered(engine: Engine) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_stubs_return_not_implemented(engine: Engine) -> None:
+async def test_remaining_tool_stubs_return_not_implemented(engine: Engine) -> None:
     app = create_app(engine)
     mcp = app.state.mcp
-    for name in (
-        "record_observation",
-        "get_timeline",
-        "get_current_state",
-        "get_narrative",
-    ):
-        result = await mcp.call_tool(name, {})
-        # FastMCP returns a (content, structured) tuple since a recent release;
-        # older versions return just content. Normalize by unwrapping.
-        payload = result[1] if isinstance(result, tuple) else result
+    for name in ("get_timeline", "get_current_state", "get_narrative"):
+        payload = _tool_payload(await mcp.call_tool(name, {}))
         assert payload["status"] == "not_implemented"
 
 
@@ -98,7 +93,7 @@ async def test_tool_call_emits_structured_log(engine: Engine) -> None:
     try:
         app = create_app(engine)
         mcp = app.state.mcp
-        await mcp.call_tool("record_observation", {})
+        await mcp.call_tool("get_timeline", {})
     finally:
         structlog.reset_defaults()
 
@@ -106,7 +101,7 @@ async def test_tool_call_emits_structured_log(engine: Engine) -> None:
     assert "tool_call_start" in events
     assert "tool_call_end" in events
     ends = [e for e in cap.entries if e["event"] == "tool_call_end"]
-    assert ends[-1]["tool"] == "record_observation"
+    assert ends[-1]["tool"] == "get_timeline"
     assert "duration_ms" in ends[-1]
     assert "request_id" in ends[-1]
 
@@ -122,3 +117,237 @@ def test_app_has_no_module_level_state() -> None:
     # app or mcp instance at import time.
     assert not hasattr(mcp_module, "app")
     assert not hasattr(mcp_module, "mcp")
+
+
+# ---- record_observation tool: happy path ---------------------------------
+
+
+@pytest.mark.asyncio
+async def test_record_observation_fact_persists_and_returns_id(engine: Engine) -> None:
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool(
+            "record_observation",
+            {
+                "kind": "fact",
+                "content": "user works at Acme",
+                "observed_at": _OBSERVED_AT_ISO,
+                "subject": "user",
+                "attribute": "employer",
+                "value": "Acme",
+            },
+        )
+    )
+    assert payload["id"].startswith("obs-")
+
+    start = datetime(2026, 4, 18, 11, tzinfo=UTC)
+    end = datetime(2026, 4, 18, 13, tzinfo=UTC)
+    timeline = engine.get_timeline(start, end)
+    assert [o.id for o in timeline] == [payload["id"]]
+    persisted = timeline[0]
+    assert persisted.content == "user works at Acme"
+    assert persisted.subject == "user"
+    assert persisted.attribute == "employer"
+    assert persisted.value == "Acme"
+
+
+@pytest.mark.asyncio
+async def test_record_observation_event_succeeds_without_subject(engine: Engine) -> None:
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool(
+            "record_observation",
+            {
+                "kind": "event",
+                "content": "visited HQ",
+                "observed_at": _OBSERVED_AT_ISO,
+            },
+        )
+    )
+    assert payload["id"].startswith("obs-")
+
+
+@pytest.mark.asyncio
+async def test_record_observation_reflection_succeeds(engine: Engine) -> None:
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool(
+            "record_observation",
+            {
+                "kind": "reflection",
+                "content": "the week went well",
+                "observed_at": _OBSERVED_AT_ISO,
+            },
+        )
+    )
+    assert payload["id"].startswith("obs-")
+
+
+@pytest.mark.asyncio
+async def test_record_observation_accepts_valid_session_id(engine: Engine) -> None:
+    app = create_app(engine)
+    payload = _tool_payload(
+        await app.state.mcp.call_tool(
+            "record_observation",
+            {
+                "kind": "event",
+                "content": "hi",
+                "observed_at": _OBSERVED_AT_ISO,
+                "session_id": "12345678-1234-1234-1234-123456789012",
+            },
+        )
+    )
+    assert payload["id"].startswith("obs-")
+
+
+# ---- record_observation tool: sad path ------------------------------------
+
+
+async def _expect_validation_error(
+    engine: Engine,
+    args: dict[str, Any],
+    *,
+    expected_field: str,
+) -> None:
+    app = create_app(engine)
+    with pytest.raises(Exception) as excinfo:
+        await app.state.mcp.call_tool("record_observation", args)
+    msg = str(excinfo.value)
+    # Either FastMCP's JSON-schema pre-validation or our handler's post-validation
+    # should reject the call; both carry a "validation" signal plus the field name.
+    assert "validation" in msg.lower()
+    assert expected_field in msg
+
+
+@pytest.mark.asyncio
+async def test_fact_missing_subject_is_rejected(engine: Engine) -> None:
+    await _expect_validation_error(
+        engine,
+        {
+            "kind": "fact",
+            "content": "missing fields",
+            "observed_at": _OBSERVED_AT_ISO,
+            "attribute": "x",
+            "value": "y",
+        },
+        expected_field="subject",
+    )
+
+
+@pytest.mark.asyncio
+async def test_fact_missing_attribute_is_rejected(engine: Engine) -> None:
+    await _expect_validation_error(
+        engine,
+        {
+            "kind": "fact",
+            "content": "missing fields",
+            "observed_at": _OBSERVED_AT_ISO,
+            "subject": "user",
+            "value": "y",
+        },
+        expected_field="attribute",
+    )
+
+
+@pytest.mark.asyncio
+async def test_fact_missing_value_is_rejected(engine: Engine) -> None:
+    await _expect_validation_error(
+        engine,
+        {
+            "kind": "fact",
+            "content": "missing fields",
+            "observed_at": _OBSERVED_AT_ISO,
+            "subject": "user",
+            "attribute": "role",
+        },
+        expected_field="value",
+    )
+
+
+@pytest.mark.asyncio
+async def test_content_empty_is_rejected(engine: Engine) -> None:
+    await _expect_validation_error(
+        engine,
+        {"kind": "event", "content": "", "observed_at": _OBSERVED_AT_ISO},
+        expected_field="content",
+    )
+
+
+@pytest.mark.asyncio
+async def test_content_too_long_is_rejected(engine: Engine) -> None:
+    await _expect_validation_error(
+        engine,
+        {"kind": "event", "content": "x" * 2001, "observed_at": _OBSERVED_AT_ISO},
+        expected_field="content",
+    )
+
+
+@pytest.mark.asyncio
+async def test_subject_too_long_is_rejected(engine: Engine) -> None:
+    await _expect_validation_error(
+        engine,
+        {
+            "kind": "fact",
+            "content": "x",
+            "observed_at": _OBSERVED_AT_ISO,
+            "subject": "a" * 101,
+            "attribute": "role",
+            "value": "dev",
+        },
+        expected_field="subject",
+    )
+
+
+@pytest.mark.asyncio
+async def test_attribute_too_long_is_rejected(engine: Engine) -> None:
+    await _expect_validation_error(
+        engine,
+        {
+            "kind": "fact",
+            "content": "x",
+            "observed_at": _OBSERVED_AT_ISO,
+            "subject": "user",
+            "attribute": "a" * 101,
+            "value": "dev",
+        },
+        expected_field="attribute",
+    )
+
+
+@pytest.mark.asyncio
+async def test_malformed_observed_at_is_rejected(engine: Engine) -> None:
+    await _expect_validation_error(
+        engine,
+        {"kind": "event", "content": "x", "observed_at": "not-a-date"},
+        expected_field="observed_at",
+    )
+
+
+@pytest.mark.asyncio
+async def test_bad_kind_is_rejected(engine: Engine) -> None:
+    app = create_app(engine)
+    with pytest.raises(Exception) as excinfo:
+        await app.state.mcp.call_tool(
+            "record_observation",
+            {
+                "kind": "preference",
+                "content": "x",
+                "observed_at": _OBSERVED_AT_ISO,
+            },
+        )
+    # FastMCP's own JSON-Schema enum validation rejects this before the handler runs.
+    assert "kind" in str(excinfo.value).lower() or "enum" in str(excinfo.value).lower()
+
+
+@pytest.mark.asyncio
+async def test_bad_session_id_is_rejected(engine: Engine) -> None:
+    await _expect_validation_error(
+        engine,
+        {
+            "kind": "event",
+            "content": "x",
+            "observed_at": _OBSERVED_AT_ISO,
+            "session_id": "not-a-uuid",
+        },
+        expected_field="session_id",
+    )
