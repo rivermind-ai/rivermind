@@ -189,22 +189,21 @@ class SQLiteMemoryStore(MemoryStore):
         period_start: datetime,
         period_end: datetime,
         topic: str | None = None,
+        *,
+        include_superseded: bool = False,
     ) -> list[Narrative]:
+        superseded_clause = "" if include_superseded else " AND n.superseded_by IS NULL"
+        params: list[object] = [period_end.isoformat(), period_start.isoformat()]
         if topic is None:
-            cur = self._conn.execute(
-                "SELECT * FROM narratives "
-                "WHERE period_start <= ? AND period_end >= ? "
-                "ORDER BY generated_at DESC",
-                (period_end.isoformat(), period_start.isoformat()),
-            )
+            base = "SELECT n.* FROM narratives AS n WHERE n.period_start <= ? AND n.period_end >= ?"
         else:
-            cur = self._conn.execute(
-                "SELECT * FROM narratives "
-                "WHERE period_start <= ? AND period_end >= ? "
-                "AND topic = ? "
-                "ORDER BY generated_at DESC",
-                (period_end.isoformat(), period_start.isoformat(), topic),
+            base = (
+                "SELECT n.* FROM narratives AS n "
+                "WHERE n.period_start <= ? AND n.period_end >= ? AND n.topic = ?"
             )
+            params.append(topic)
+        sql = base + superseded_clause + " ORDER BY n.generated_at DESC"
+        cur = self._conn.execute(sql, params)
         return [self._row_to_narrative(row) for row in cur.fetchall()]
 
     @staticmethod

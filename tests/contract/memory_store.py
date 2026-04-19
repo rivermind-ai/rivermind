@@ -494,6 +494,68 @@ class MemoryStoreContractTests:
         assert isinstance(version, int)
         assert version > 0
 
+    def test_get_narratives_excludes_superseded_by_default(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        store.save_narrative(
+            Narrative(
+                id="nar-new",
+                content="newer summary",
+                topic="career",
+                period_start=t(0),
+                period_end=t(60),
+                source_observations=[],
+                generated_at=t(100),
+            )
+        )
+        store.save_narrative(
+            Narrative(
+                id="nar-old",
+                content="older summary",
+                topic="career",
+                period_start=t(0),
+                period_end=t(60),
+                source_observations=[],
+                generated_at=t(50),
+                superseded_by="nar-new",
+            )
+        )
+        default = store.get_narratives(t(-60), t(120))
+        assert {n.id for n in default} == {"nar-new"}
+
+    def test_get_narratives_include_superseded_returns_all(
+        self,
+        store: MemoryStore,
+        t: Callable[[int], datetime],
+    ) -> None:
+        store.save_narrative(
+            Narrative(
+                id="nar-new",
+                content="newer summary",
+                topic="career",
+                period_start=t(0),
+                period_end=t(60),
+                source_observations=[],
+                generated_at=t(100),
+            )
+        )
+        store.save_narrative(
+            Narrative(
+                id="nar-old",
+                content="older summary",
+                topic="career",
+                period_start=t(0),
+                period_end=t(60),
+                source_observations=[],
+                generated_at=t(50),
+                superseded_by="nar-new",
+            )
+        )
+        full = store.get_narratives(t(-60), t(120), include_superseded=True)
+        assert {n.id for n in full} == {"nar-new", "nar-old"}
+
     def test_get_narratives_ordered_by_generated_at_desc(
         self,
         store: MemoryStore,

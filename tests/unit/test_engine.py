@@ -89,8 +89,10 @@ class _RecordingStore:
         period_start: datetime,
         period_end: datetime,
         topic: str | None = None,
+        *,
+        include_superseded: bool = False,
     ) -> list[Narrative]:
-        self.calls.append(("get_narratives", (period_start, period_end, topic)))
+        self.calls.append(("get_narratives", (period_start, period_end, topic, include_superseded)))
         hits = [
             n
             for n in self._narratives
@@ -98,6 +100,8 @@ class _RecordingStore:
         ]
         if topic is not None:
             hits = [n for n in hits if n.topic == topic]
+        if not include_superseded:
+            hits = [n for n in hits if n.superseded_by is None]
         return sorted(hits, key=lambda n: n.generated_at, reverse=True)
 
     def schema_version(self) -> int:
@@ -224,7 +228,14 @@ def test_get_narrative_forwards_topic() -> None:
     store = _RecordingStore()
     engine = Engine(store)
     engine.get_narrative(_t(), _t(60), topic="career")
-    assert store.calls[-1] == ("get_narratives", (_t(), _t(60), "career"))
+    assert store.calls[-1] == ("get_narratives", (_t(), _t(60), "career", False))
+
+
+def test_get_narrative_forwards_include_superseded() -> None:
+    store = _RecordingStore()
+    engine = Engine(store)
+    engine.get_narrative(_t(), _t(60), include_superseded=True)
+    assert store.calls[-1] == ("get_narratives", (_t(), _t(60), None, True))
 
 
 def test_get_timeline_forwards_limit_and_include_superseded() -> None:

@@ -55,6 +55,8 @@ class _StubMemoryStore:
         period_start: datetime,
         period_end: datetime,
         topic: str | None = None,
+        *,
+        include_superseded: bool = False,
     ) -> list[Narrative]:
         return []
 
@@ -133,8 +135,15 @@ def test_get_observations_signature() -> None:
 
 def test_get_narratives_signature() -> None:
     sig = inspect.signature(MemoryStore.get_narratives)
-    assert list(sig.parameters) == ["self", "period_start", "period_end", "topic"]
+    assert list(sig.parameters) == [
+        "self",
+        "period_start",
+        "period_end",
+        "topic",
+        "include_superseded",
+    ]
     assert sig.parameters["topic"].default is None
+    assert sig.parameters["include_superseded"].default is False
 
 
 def test_embed_signature() -> None:
