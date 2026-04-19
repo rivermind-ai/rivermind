@@ -408,6 +408,13 @@ class MemoryStoreContractTests:
         # "Acme" is in content but not in topic; topic filter should miss
         assert store.get_narratives(t(-60), t(120), topic="Acme") == []
 
+    # ---- schema_version ---------------------------------------------------
+
+    def test_schema_version_returns_positive_int(self, store: MemoryStore) -> None:
+        version = store.schema_version()
+        assert isinstance(version, int)
+        assert version > 0
+
     def test_get_narratives_ordered_by_generated_at_desc(
         self,
         store: MemoryStore,

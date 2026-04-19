@@ -55,6 +55,9 @@ class _StubMemoryStore:
     ) -> list[Narrative]:
         return []
 
+    def schema_version(self) -> int:
+        return 1
+
 
 class _StubEmbedder:
     def embed(self, texts: list[str]) -> list[list[float]]:
@@ -100,6 +103,7 @@ def test_memory_store_method_names() -> None:
         "list_states",
         "save_narrative",
         "get_narratives",
+        "schema_version",
     }
     actual = {
         name

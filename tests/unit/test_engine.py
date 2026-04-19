@@ -94,6 +94,10 @@ class _RecordingStore:
             hits = [n for n in hits if n.topic == topic]
         return sorted(hits, key=lambda n: n.generated_at, reverse=True)
 
+    def schema_version(self) -> int:
+        self.calls.append(("schema_version", ()))
+        return 1
+
 
 def test_record_observation_persists_and_returns_id() -> None:
     store = _RecordingStore()
@@ -215,6 +219,13 @@ def test_get_narrative_forwards_topic() -> None:
     engine = Engine(store)
     engine.get_narrative(_t(), _t(60), topic="career")
     assert store.calls[-1] == ("get_narratives", (_t(), _t(60), "career"))
+
+
+def test_schema_version_delegates_to_store() -> None:
+    store = _RecordingStore()
+    engine = Engine(store)
+    assert engine.schema_version() == 1
+    assert store.calls[-1] == ("schema_version", ())
 
 
 def test_engine_accepts_optional_extractor() -> None:
