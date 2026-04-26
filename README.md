@@ -4,6 +4,8 @@
 
 Rivermind is a temporal memory layer for LLMs. It runs as a local MCP server over SQLite, stores bi-temporal observations (facts, events, reflections), and gives any MCP client cross-session recall without custom retrieval code.
 
+![Rivermind architecture overview](./docs/assets/overview.png)
+
 ## Install
 
 ```bash
@@ -22,6 +24,12 @@ rivermind serve                # starts http://127.0.0.1:8080 (MCP at /mcp)
 ```
 
 To wire this into Claude Desktop (three minutes from clone to Claude remembering what you told it), see the [Claude Desktop quickstart](./docs/quickstart-claude.md).
+
+## Recall across sessions
+
+Rivermind records observations as you work and surfaces them in later conversations, with bi-temporal awareness of when something happened versus when it was learned.
+
+![Rivermind across sessions: record now, recall later](./docs/assets/ux-vis.png)
 
 ## Narrative synthesis (optional)
 
